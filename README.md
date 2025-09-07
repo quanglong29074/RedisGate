@@ -141,7 +141,7 @@ curl http://localhost:8080/instances/user-session-cache/keys/user:123 \
 -----
 
 
-### Browser-based Testing (Method Override)
+### Method Override
 
 To facilitate easy testing directly from a web browser, any `GET` request can simulate other methods (`POST`, `DELETE`, etc.) by using the `method` query parameter.
 * **Rule:** Add `?method=METHOD_NAME` to a `GET` request's URL.
