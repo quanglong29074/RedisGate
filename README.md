@@ -23,12 +23,9 @@ Modern serverless and edge computing platforms (e.g., Cloudflare Workers, Vercel
 
 The system consists of two primary components: a **Control Plane** (the Operator) and a **Data Plane** (the shared Gateway).
 
-1.  A developer defines a `RedisHttpInstance` YAML file.
-2.  `kubectl apply` sends the manifest to the Kubernetes API Server.
-3.  The **Kubernetes Operator** (Control Plane) detects the new resource and provisions the required components: a Redis `StatefulSet`, a headless `Service`, and a `Secret` containing a unique API key.
-4.  A client (e.g., a Cloudflare Worker) sends an HTTP request to the **Shared HTTP Gateway** (Data Plane).
-5.  The Gateway authenticates the request using the API key, identifies the target Redis instance from the URL, and translates the HTTP call into a native Redis command.
-6.  The command is sent to the appropriate Redis instance over the internal cluster network.
+1.  A client (e.g., a Cloudflare Worker) sends an HTTP request to the **Shared HTTP Gateway** (Data Plane).
+2.  The Gateway authenticates the request using the API key, identifies the target Redis instance from the URL, and translates the HTTP call into a native Redis command.
+3.  The command is sent to the appropriate Redis instance over the internal cluster network.
 
 
 
