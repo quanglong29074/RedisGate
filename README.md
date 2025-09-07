@@ -140,6 +140,21 @@ curl http://localhost:8080/instances/user-session-cache/keys/user:123 \
 
 -----
 
+
+### Browser-based Testing (Method Override)
+
+To facilitate easy testing directly from a web browser, any `GET` request can simulate other methods (`POST`, `DELETE`, etc.) by using the `method` query parameter.
+* **Rule:** Add `?method=METHOD_NAME` to a `GET` request's URL.
+* **Arguments:** For methods that require a body (like `SET`), pass the data as additional query parameters (e.g., `&value=some_value`, `&field=some_field`).
+
+**Example:**
+
+The standard `POST` request to set a key:
+```bash
+curl -X POST http://localhost:8080/instances/user-session-cache/keys/user:123 \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"value": "john_doe"}'
 ## 🗺️ Roadmap
 
 Our vision is to evolve this into a robust, enterprise-ready data platform solution.
