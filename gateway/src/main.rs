@@ -5,7 +5,7 @@ use axum::{
 };
 use deadpool_redis::{Pool, Runtime};
 use metrics_exporter_prometheus::PrometheusBuilder;
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr};
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::{fmt};
