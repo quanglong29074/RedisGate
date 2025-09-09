@@ -7,4 +7,4 @@ resources:
   - ../rbac/clusterrolebinding-operator.yaml
   - ../rbac/clusterrole-edit.yaml
   - ../rbac/clusterrole-view.yaml
-# commit: chore(kustomize): add install kustomization (CRDs + RBAC)
+
