@@ -1,46 +1,60 @@
+// main.rs
 use axum::{routing::{get, post}, Router};
-use redis::Client;
-use serde::{Serialize, Deserialize};
-use std::{net::SocketAddr, sync::Arc};
-use tokio::sync::Mutex;
+use std::net::SocketAddr;
+use deadpool_redis::{Pool, Runtime};
 
 mod handlers;
-use handlers::keys::{set_key, get_key};
+use handlers::keys::{get_key, set_key};
+use handlers::health::health_check;
 
-// Alias cho Redis connection
-type RedisConn = Arc<Mutex<redis::aio::MultiplexedConnection>>;
+mod config;
+use crate::config::{Config, RedisConfig};
 
+// Alias for Redis pool type
+type RedisPool = Pool;
 
-/// Hàm khởi tạo Redis connection
-async fn init_redis(url: &str) -> RedisConn {
-    let client = Client::open(url).unwrap();
-    let conn = client.get_multiplexed_async_connection().await.unwrap();
-    Arc::new(Mutex::new(conn))
+/// Initialize Redis connection pool
+async fn init_redis_pool(cfg: &RedisConfig) -> Pool {
+    // Create pool configuration from Redis URL
+    let mut cfg_pool = deadpool_redis::Config::from_url(cfg.url.as_str());
+
+    // Customize pool settings if needed
+    cfg_pool.pool = Some(deadpool_redis::PoolConfig {
+        max_size: cfg.pool_size as usize,
+        timeouts: Default::default(),
+    });
+
+    cfg_pool
+        .create_pool(Some(Runtime::Tokio1))
+        .expect("Failed to create Redis pool")
 }
 
-/// Hàm main khởi chạy server
+/// Main function to start the server
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     println!("🚀 Server starting...");
 
-    // Redis connection
-    let redis_conn = init_redis("redis://127.0.0.1:6379/").await;
-    println!("✅ Redis connection established");
+    // Load configuration
+    let cfg = Config::from_env()?;
+    println!("⚙️ Loaded config: {:?}", cfg);
 
-    // Router
+    // Initialize Redis pool
+    let redis_pool = init_redis_pool(&cfg.redis).await;
+    println!("✅ Redis pool established");
+
+    // Build router with routes
     let app = Router::new()
         .route("/set/{key}/{value}", post(set_key))
         .route("/get/{key}", get(get_key))
-        .with_state(redis_conn);
+        .route("/healthz", get(health_check))
+        .with_state(redis_pool);
 
-    // Server address
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    // Define server address
+    let addr = SocketAddr::from(([0, 0, 0, 0], cfg.server.port));
     println!("🌐 Server running at http://{}", addr);
 
-
-    // Start server
+    // Start HTTP server
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    if let Err(e) = axum::serve(listener, app).await {
-        eprintln!("❌ Error starting server: {}", e);
-    }
+    axum::serve(listener, app).await;
+    Ok(())
 }
