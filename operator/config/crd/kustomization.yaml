@@ -3,4 +3,3 @@ kind: Kustomization
 resources:
   - bases/redis.kubegateway.io_redishttpinstances.yaml
   - bases/redis.kubegateway.io_apikeys.yaml
-# commit: chore(kustomize): add CRD kustomization aggregating CRD bases
