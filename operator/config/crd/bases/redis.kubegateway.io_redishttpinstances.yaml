@@ -1,0 +1,95 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: redishttpinstances.redis.kubegateway.io
+spec:
+  group: redis.kubegateway.io
+  names:
+    kind: RedisHttpInstance
+    listKind: RedisHttpInstanceList
+    plural: redishttpinstances
+    singular: redishttpinstance
+    shortNames:
+      - rhi
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Subdomain
+          type: string
+          jsonPath: .spec.networking.subdomain
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: Declarative Redis instance managed by the Redis HTTP Operator
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required:
+                - instanceName
+              properties:
+                instanceName:
+                  type: string
+                  maxLength: 63
+                  pattern: '^[a-z0-9-]+$'
+                  description: DNS-friendly name for the Redis instance
+                redisConfig:
+                  type: object
+                  properties:
+                    memory:
+                      type: string
+                      pattern: '^[0-9]+(Mi|Gi)$'
+                      description: Max memory limit (e.g., 512Mi, 1Gi)
+                    persistence:
+                      type: boolean
+                      description: Whether to enable RDB/AOF persistence
+                    appendOnly:
+                      type: boolean
+                      description: Enable AOF (appendonly yes)
+                networking:
+                  type: object
+                  properties:
+                    subdomain:
+                      type: string
+                      maxLength: 63
+                      pattern: '^[a-z0-9-]+$'
+                      description: Subdomain to expose the instance (if applicable)
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum:
+                    - Pending
+                    - Running
+                    - Failed
+                    - Terminating
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
