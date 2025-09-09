@@ -93,4 +93,3 @@ spec:
                       lastTransitionTime:
                         type: string
                         format: date-time
-# commit: feat(crd): add RedisHttpInstance CRD (v1alpha1)
