@@ -1,0 +1,35 @@
+# Reduce Docker build context for Rust operator
+
+# VCS and editor files
+.git
+.gitignore
+.github
+.vscode
+.idea
+.DS_Store
+*.swp
+*.swo
+*.log
+*.tmp
+*.bak
+
+# Rust build artifacts
+target
+**/target
+.cargo/registry
+.cargo/git
+
+# Local env and compose files
+.env
+.env.*
+docker-compose.yml
+docker-compose.*.yml
+compose.yaml
+compose.*.yaml
+
+# Not needed for production image build
+tests
+benches
+examples
+docs
+
