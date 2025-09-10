@@ -1,0 +1,11 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: redis-editor
+  labels:
+    app.kubernetes.io/part-of: redis-http-cloud
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+rules:
+  - apiGroups: ["redis.kubegateway.io"]
+    resources: ["redishttpinstances", "apikeys"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
