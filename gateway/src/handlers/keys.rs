@@ -1,10 +1,15 @@
-use axum::{extract::{Path, State}, response::IntoResponse, Json};
-use deadpool_redis::{Pool, redis::AsyncCommands};
+use axum::{
+    extract::{Path, State},
+    response::IntoResponse,
+    Json,
+};
+use deadpool_redis::{
+    redis::{AsyncCommands, FromRedisValue},
+    Pool,
+};
 use serde_json::json;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
-
+use crate::error::{GatewayError, Result}; // Import Result và GatewayError
 
 /// Alias cho pool
 type RedisPool = Pool;
@@ -13,23 +18,23 @@ type RedisPool = Pool;
 pub async fn set_key(
     State(pool): State<RedisPool>,
     Path((key, value)): Path<(String, String)>,
-) -> impl IntoResponse {
-    let mut conn = pool.get().await.unwrap();
-    let _: () = conn.set(&key, &value).await.unwrap();
+) -> Result<impl IntoResponse> { // Trả về Result
+    let mut conn = pool.get().await?; // Xử lý lỗi từ pool.get()
+    let _: () = conn.set(&key, &value).await?; // Xử lý lỗi từ conn.set()
 
-    Json(json!({ "result": "OK" }))
+    Ok(Json(json!({ "result": "OK" }))) // Trả về Ok nếu thành công
 }
 
 /// GET /get/:key
 pub async fn get_key(
     State(pool): State<RedisPool>,
     Path(key): Path<String>,
-) -> impl IntoResponse {
-    let mut conn = pool.get().await.unwrap();
-    let result: Option<String> = conn.get(&key).await.unwrap();
+) -> Result<impl IntoResponse> { // Trả về Result
+    let mut conn = pool.get().await?; // Xử lý lỗi từ pool.get()
+    let result: Option<String> = conn.get(&key).await?; // Xử lý lỗi từ conn.get()
 
     match result {
-        Some(value) => Json(json!({ "result": value })),
-        None => Json(json!({ "error": "Key not found" })),
+        Some(value) => Ok(Json(json!({ "result": value }))), // Trả về Ok nếu tìm thấy
+        None => Err(GatewayError::InstanceNotFound(format!("Key '{}' not found", key))), // Trả về lỗi nếu không tìm thấy
     }
 }
