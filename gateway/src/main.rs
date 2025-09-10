@@ -16,8 +16,11 @@ mod config;
 mod handlers;
 mod error;
 mod redis;
+mod server;
 
 use crate::config::{Config, RedisConfig};
+use crate::redis::pool::RedisPoolManager;
+use crate::server::AppState;
 
 use handlers::health::{health_check, metrics_endpoint};
 use handlers::keys::{get_key, set_key};
@@ -27,22 +30,22 @@ use middleware::{logging::request_logger, metrics::metrics_middleware};
 
 
 
-/// Alias for Redis connection pool
-type RedisPool = Pool;
-
-/// Initialize Redis connection pool
-async fn init_redis_pool(cfg: &RedisConfig) -> RedisPool {
-    let mut cfg_pool = deadpool_redis::Config::from_url(&cfg.url);
-
-    cfg_pool.pool = Some(deadpool_redis::PoolConfig {
-        max_size: cfg.pool_size as usize,
-        timeouts: Default::default(),
-    });
-
-    cfg_pool
-        .create_pool(Some(Runtime::Tokio1))
-        .expect("Failed to create Redis pool")
-}
+// /// Alias for Redis connection pool
+// type RedisPool = Pool;
+//
+// /// Initialize Redis connection pool
+// async fn init_redis_pool(cfg: &RedisConfig) -> RedisPool {
+//     let mut cfg_pool = deadpool_redis::Config::from_url(&cfg.url);
+//
+//     cfg_pool.pool = Some(deadpool_redis::PoolConfig {
+//         max_size: cfg.pool_size as usize,
+//         timeouts: Default::default(),
+//     });
+//
+//     cfg_pool
+//         .create_pool(Some(Runtime::Tokio1))
+//         .expect("Failed to create Redis pool")
+// }
 
 /// Main entry point
 #[tokio::main]
@@ -68,16 +71,18 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(?cfg, "⚙️ Loaded configuration");
 
     // Initialize Redis connection pool
-    let redis_pool = init_redis_pool(&redis_cfg).await;
-    tracing::info!("✅ Redis pool established");
+    let redis_pool_manager = RedisPoolManager::new(&redis_cfg).await?;
+    tracing::info!("✅ RedisPoolManager initialized");
 
     // Initialize Prometheus metrics recorder
     let metrics_handle = PrometheusBuilder::new()
         .install_recorder()
         .expect("Failed to install Prometheus recorder");
 
-    let redis_pool_for_router = redis_pool.clone();
-    let redis_pool_for_shutdown = redis_pool.clone();
+    let app_state = AppState {
+        redis_pool: redis_pool_manager.clone(),
+        config: cfg.clone(),
+    };
 
     // Build application router
     let app = Router::new()
@@ -91,7 +96,7 @@ async fn main() -> anyhow::Result<()> {
                 move || async move { metrics_endpoint(handle.clone()).await }
             }),
         )
-        .with_state(redis_pool_for_router)
+        .with_state(app_state)
         .layer(
             ServiceBuilder::new()
                 .layer(CorsLayer::permissive())
@@ -109,8 +114,7 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             shutdown_signal().await;
-            tracing::info!("⚡ Dropping Redis pool...");
-            drop(redis_pool_for_shutdown);
+            tracing::info!("⚡ Shutdown signal received, cleaning up...");
         })
         .await?;
 

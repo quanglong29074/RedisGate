@@ -1,9 +1,16 @@
-[server]
-port = 8080
-
 [redis]
 url = "redis://127.0.0.1:6379/"
-pool_size = 16
+pool_size = 16  # (có thể không cần, nếu không dùng nữa)
+pool_max_size = 16
+pool_timeout_seconds = 5
+default_password = ""  # Hoặc bỏ dòng này nếu không dùng auth
 
 [logging]
 level = "info"
+
+[server]
+port = 8080
+
+[redis.health]
+refresh_interval_seconds = 30
+health_check_interval_seconds = 60
