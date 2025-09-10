@@ -11,15 +11,21 @@ use tower_http::cors::CorsLayer;
 use tracing_subscriber::{fmt, prelude::*};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use tracing_subscriber::{filter::EnvFilter};
+
 mod config;
+mod handlers;
+mod error;
+mod redis;
+
 use crate::config::{Config, RedisConfig};
 
-mod handlers;
 use handlers::health::{health_check, metrics_endpoint};
 use handlers::keys::{get_key, set_key};
 
 mod middleware;
 use middleware::{logging::request_logger, metrics::metrics_middleware};
+
+
 
 /// Alias for Redis connection pool
 type RedisPool = Pool;
