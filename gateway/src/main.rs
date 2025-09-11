@@ -86,12 +86,10 @@ async fn main() -> anyhow::Result<()> {
 
     // Build application router
     let app = Router::new()
-        .route("/set/{key}/{value}", post(set_key))
-        .route("/get/{key}", get(get_key))
+        .route("/{instance_name}/set/{key}", post(set_key))
+        .route("/{instance_name}/get/{key}", get(get_key))
         .route("/healthz", get(health_check))
-        .route(
-            "/metrics",
-            get({
+        .route("/metrics", get({
                 let handle = metrics_handle.clone();
                 move || async move { metrics_endpoint(handle.clone()).await }
             }),

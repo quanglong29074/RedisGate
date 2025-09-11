@@ -82,6 +82,7 @@ pub async fn get_key(
     Query(params): Query<MethodOverride>,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>> {
+    println!("🔑 Đang thực hiện GET key '{}' trên instance '{}'", key, instance_name);
     // Handle method override
     if let Some(method) = &params.method {
         match method.to_uppercase().as_str() {
