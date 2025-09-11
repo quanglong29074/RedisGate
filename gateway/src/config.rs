@@ -12,6 +12,9 @@ pub struct ServerConfig {
 pub struct RedisConfig {
     pub url: String,
     pub pool_size: usize,
+    pub pool_max_size: usize,
+    pub pool_timeout_seconds: u64,
+    pub default_password: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
