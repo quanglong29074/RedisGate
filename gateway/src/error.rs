@@ -22,6 +22,10 @@ pub enum GatewayError {
     #[error("Instance not found: {0}")]
     InstanceNotFound(String),
 
+    #[error("Failed to connect to Redis instance: {0}")]
+    RedisConnectionError(String),
+
+
     #[error("Invalid request: {0}")]
     BadRequest(String),
 
@@ -50,6 +54,7 @@ impl IntoResponse for GatewayError {
             GatewayError::KubeError(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Kubernetes client error: {}", e),),
             GatewayError::CreatePool(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Create pool error: {}", e)),
             GatewayError::SerdeJson(e) => (StatusCode::BAD_REQUEST, format!("JSON error: {}", e)),
+            GatewayError::RedisConnectionError(e) => (StatusCode::BAD_REQUEST, format!("Connect to Redis instance error: {}", e)),
         };
 
         let body = Json(json!({
