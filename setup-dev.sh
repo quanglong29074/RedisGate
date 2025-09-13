@@ -208,7 +208,7 @@ setup_minikube() {
 
 # Setup external dependencies with Docker Compose
 setup_external_dependencies() {
-    log_info "Setting up external dependencies (PostgreSQL, Redis)..."
+    log_info "Setting up external dependencies (PostgreSQL)..."
     
     # Detect Docker Compose command
     local compose_cmd
@@ -230,7 +230,7 @@ setup_external_dependencies() {
     fi
     
     # Start services
-    log_info "Starting PostgreSQL and Redis services..."
+    log_info "Starting PostgreSQL service..."
     $compose_cmd up -d
     
     # Wait for services to be healthy
@@ -256,24 +256,7 @@ setup_external_dependencies() {
         sleep 2
         ((attempt++))
     done
-    
-    # Check Redis connection
-    attempt=1
-    while [[ $attempt -le $max_attempts ]]; do
-        if $compose_cmd exec -T redis redis-cli -a "${REDIS_PASSWORD}" ping >/dev/null 2>&1; then
-            log_success "Redis is ready"
-            break
-        fi
-        
-        if [[ $attempt -eq $max_attempts ]]; then
-            log_error "Redis failed to start after $max_attempts attempts"
-            exit 1
-        fi
-        
-        log_info "Waiting for Redis... (attempt $attempt/$max_attempts)"
-        sleep 2
-        ((attempt++))
-    done
+
     
     log_success "External dependencies are ready"
     
@@ -285,12 +268,6 @@ setup_external_dependencies() {
     echo "  Database: ${POSTGRES_DB}"
     echo "  Username: ${POSTGRES_USER}"
     echo "  Password: ${POSTGRES_PASSWORD}"
-    echo ""
-    echo "Redis:"
-    echo "  Host: ${REDIS_HOST}:${REDIS_PORT}"
-    echo "  Password: ${REDIS_PASSWORD}"
-    echo ""
-    echo "Redis Insight (Web UI): http://localhost:8001"
     echo ""
 }
 
@@ -323,9 +300,6 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Database
 sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "postgres", "uuid", "chrono"] }
-
-# Redis
-redis = { version = "0.23", features = ["tokio-comp"] }
 
 # Web framework
 axum = "0.7"

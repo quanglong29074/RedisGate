@@ -16,8 +16,7 @@ async fn main() {
     dotenv::dotenv().ok();
 
     // Database connection
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set");
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
     let pool = PgPool::connect(&database_url)
         .await
@@ -58,7 +57,11 @@ async fn health_check(Extension(pool): Extension<Arc<PgPool>>) -> Json<serde_jso
     {
         Ok(row) => {
             let status: i32 = row.get("status");
-            if status == 1 { "healthy" } else { "unhealthy" }
+            if status == 1 {
+                "healthy"
+            } else {
+                "unhealthy"
+            }
         }
         Err(e) => {
             warn!("Database health check failed: {}", e);

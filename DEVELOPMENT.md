@@ -24,13 +24,13 @@ This directory contains scripts and configuration files to set up a complete dev
 ### Configuration Files
 
 - **`env.development`** - Environment variables for development
-- **`docker-compose.yml`** - PostgreSQL and Redis services configuration
+- **`docker-compose.yml`** - PostgreSQL service configuration
 - **`scripts/init-db.sql`** - Database initialization script
 
 ### Scripts
 
 - **`setup-dev.sh`** - Main setup script for development environment
-- **`scripts/dev-services.sh`** - Manage external services (PostgreSQL, Redis)
+- **`scripts/dev-services.sh`** - Manage external services (PostgreSQL)
 - **`scripts/minikube-dev.sh`** - Manage Minikube cluster
 
 ## Detailed Setup
@@ -59,11 +59,11 @@ The main setup script installs and configures all development dependencies:
 - **Rust** - Programming language and toolchain
 - **kubectl** - Kubernetes command-line tool
 - **Minikube** - Local Kubernetes cluster
-- **PostgreSQL & Redis** - External dependencies via Docker
+- **PostgreSQL** - External dependency via Docker
 
 ### 2. Services Management (`scripts/dev-services.sh`)
 
-Manage PostgreSQL and Redis services:
+Manage PostgreSQL service:
 
 ```bash
 # Start all services
@@ -80,13 +80,9 @@ Manage PostgreSQL and Redis services:
 
 # View logs (specific service)
 ./scripts/dev-services.sh logs postgres
-./scripts/dev-services.sh logs redis
 
 # Connect to PostgreSQL
 ./scripts/dev-services.sh psql
-
-# Connect to Redis
-./scripts/dev-services.sh redis-cli
 
 # Clean restart (removes all data)
 ./scripts/dev-services.sh clean
@@ -136,11 +132,6 @@ POSTGRES_USER=redisgate_dev
 POSTGRES_PASSWORD=redisgate_dev_password
 POSTGRES_DB=redisgate_dev
 
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=redisgate_redis_password
-
 # Application
 APP_HOST=0.0.0.0
 APP_PORT=8080
@@ -161,8 +152,6 @@ MINIKUBE_CPUS=2
 After starting services, you can access:
 
 - **PostgreSQL**: `localhost:5432`
-- **Redis**: `localhost:6379`
-- **Redis Insight** (Web UI): `http://localhost:8001`
 - **Minikube Dashboard**: `minikube dashboard` (opens in browser)
 
 ## Development Workflow
@@ -198,11 +187,6 @@ After starting services, you can access:
 **Connect to PostgreSQL:**
 ```bash
 ./scripts/dev-services.sh psql
-```
-
-**Connect to Redis:**
-```bash
-./scripts/dev-services.sh redis-cli
 ```
 
 **Reset database:**

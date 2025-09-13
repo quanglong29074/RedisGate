@@ -63,40 +63,40 @@ pub struct RedisInstance {
     pub slug: String,
     pub organization_id: Uuid,
     pub api_key_id: Uuid,
-    
+
     // Network configuration
     pub port: i32,
     pub private_ip_address: Option<IpAddr>,
     pub public_ip_address: Option<IpAddr>,
     pub domain: Option<String>,
-    
+
     // Redis configuration
     pub max_memory: i64,
     pub current_memory: i64,
     pub password_hash: Option<String>,
     pub redis_version: String,
-    
+
     // Kubernetes configuration
     pub namespace: String,
     pub pod_name: Option<String>,
     pub service_name: Option<String>,
-    
+
     // Instance status and metadata
     pub status: String,
     pub last_health_check_at: Option<DateTime<Utc>>,
     pub health_status: String,
-    
+
     // Resource usage tracking
     pub cpu_usage_percent: rust_decimal::Decimal,
     pub memory_usage_percent: rust_decimal::Decimal,
     pub connections_count: i32,
     pub max_connections: i32,
-    
+
     // Backup and persistence
     pub persistence_enabled: bool,
     pub backup_enabled: bool,
     pub last_backup_at: Option<DateTime<Utc>>,
-    
+
     // Timestamps
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

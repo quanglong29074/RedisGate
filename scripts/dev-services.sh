@@ -91,8 +91,6 @@ show_status() {
     echo ""
     log_info "Service URLs:"
     echo "  PostgreSQL: ${POSTGRES_HOST:-localhost}:${POSTGRES_PORT:-5432}"
-    echo "  Redis: ${REDIS_HOST:-localhost}:${REDIS_PORT:-6379}"
-    echo "  Redis Insight: http://localhost:8001"
 }
 
 # Show logs
@@ -113,7 +111,7 @@ show_logs() {
 # Clean up volumes and restart
 clean_restart() {
     local compose_cmd=$(get_compose_cmd)
-    log_warning "This will remove all data in PostgreSQL and Redis!"
+    log_warning "This will remove all data in PostgreSQL!"
     read -p "Are you sure you want to continue? (y/N): " -n 1 -r
     echo
     
@@ -155,13 +153,7 @@ connect_postgres() {
     $compose_cmd exec postgres psql -U "${POSTGRES_USER:-redisgate_dev}" -d "${POSTGRES_DB:-redisgate_dev}"
 }
 
-# Connect to Redis
-connect_redis() {
-    local compose_cmd=$(get_compose_cmd)
-    log_info "Connecting to Redis..."
-    cd "$PROJECT_ROOT"
-    $compose_cmd exec redis redis-cli -a "${REDIS_PASSWORD:-redisgate_redis_password}"
-}
+
 
 # Show help
 show_help() {
@@ -178,13 +170,12 @@ show_help() {
     echo "  clean           Clean restart (removes all data)"
     echo "  reset-db        Reset PostgreSQL database"
     echo "  psql            Connect to PostgreSQL"
-    echo "  redis-cli       Connect to Redis"
     echo "  help            Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0 start        Start all services"
     echo "  $0 logs         Show all logs"
-    echo "  $0 logs redis   Show Redis logs only"
+    echo "  $0 logs postgres   Show PostgreSQL logs only"
     echo "  $0 psql         Connect to PostgreSQL"
     echo ""
 }
@@ -217,9 +208,6 @@ main() {
             ;;
         psql)
             connect_postgres
-            ;;
-        redis-cli)
-            connect_redis
             ;;
         help|--help|-h)
             show_help

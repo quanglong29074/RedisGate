@@ -4,17 +4,19 @@
 [](https://opensource.org/licenses/MIT)
 [](https://www.google.com/search?q=https://github.com/your-repo/your-project/releases)
 
-A cloud-native solution for providing Redis-as-a-Service on Kubernetes, accessible via a secure, high-performance, shared RESTful API. Designed for modern serverless and edge environments where direct TCP connections are restricted.
+A cloud-native solution for providing Redis-as-a-Service on Kubernetes, accessible via a secure, high-performance, shared RESTful API. This repository contains the management API and control plane components. Designed for modern serverless and edge environments where direct TCP connections are restricted.
 
 ## 🚀 Quick Start
 
 ### Development Setup
 
+This project provides the management API and control plane for RedisGate. The development environment includes PostgreSQL for metadata storage, but actual Redis instances are managed by the Kubernetes operator.
+
 ```bash
 # One-time setup (installs all dependencies)
 ./setup-dev.sh
 
-# Start development services
+# Start development services (PostgreSQL)
 make dev
 
 # Start Minikube and deploy
@@ -471,6 +473,20 @@ Pricing is based on per command/request. The same pricing applies to your REST c
 ### Metrics and Monitoring
 
 In the current version, we do not expose any metrics specific to API calls in the console. But the metrics of the database backing the API should give a good summary about the performance of your APIs.
+
+## 🚀 CI/CD Pipeline
+
+This project includes a comprehensive GitHub Actions CI/CD pipeline that automatically:
+
+- **Code Quality**: Runs `cargo fmt` and `cargo clippy` for code formatting and linting
+- **Testing**: Executes the full test suite with PostgreSQL service dependencies
+- **Building**: Creates optimized release builds for multiple targets
+- **Security**: Performs security audits using `cargo audit`
+- **Docker**: Builds and validates Docker images
+- **Artifacts**: Uploads release binaries for distribution
+
+The pipeline runs on every push to `main` and `develop` branches, as well as on pull requests.
+
 ## 🗺️ Roadmap
 
 Our vision is to evolve this into a robust, enterprise-ready data platform solution.
