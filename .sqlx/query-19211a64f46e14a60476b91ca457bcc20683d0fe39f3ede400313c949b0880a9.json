@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organization_memberships SET is_active = false, updated_at = $1 WHERE organization_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "19211a64f46e14a60476b91ca457bcc20683d0fe39f3ede400313c949b0880a9"
+}

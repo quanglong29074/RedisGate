@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) as count FROM organizations o\n        INNER JOIN organization_memberships om ON o.id = om.organization_id\n        WHERE om.user_id = $1 AND om.is_active = true\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2a066823010f44e9964da273c53a41d76210772bd007111d5c695fa58c70fcc1"
+}

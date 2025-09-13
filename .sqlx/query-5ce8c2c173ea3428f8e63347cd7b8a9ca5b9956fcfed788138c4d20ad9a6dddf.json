@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT organization_id FROM organization_memberships WHERE user_id = $1 AND is_active = true ORDER BY created_at ASC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "organization_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5ce8c2c173ea3428f8e63347cd7b8a9ca5b9956fcfed788138c4d20ad9a6dddf"
+}
