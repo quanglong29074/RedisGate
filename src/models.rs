@@ -48,7 +48,7 @@ pub struct ApiKey {
     pub key_prefix: String,
     pub user_id: Uuid,
     pub organization_id: Uuid,
-    pub scopes: Vec<String>,
+    pub scopes: Option<Vec<String>>,
     pub last_used_at: Option<DateTime<Utc>>,
     pub last_used_ip: Option<ipnetwork::IpNetwork>,
     pub is_active: Option<bool>,
@@ -57,7 +57,7 @@ pub struct ApiKey {
     pub updated_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, FromRow, Serialize, Deserialize)]
+#[derive(Debug, FromRow)]
 pub struct RedisInstance {
     pub id: Uuid,
     pub name: String,

@@ -9,6 +9,7 @@ use chrono::Utc;
 use std::sync::Arc;
 use uuid::Uuid;
 use validator::Validate;
+use sqlx::types::BigDecimal;
 
 use crate::api_models::{
     ApiResponse, CreateRedisInstanceRequest, PaginatedResponse, PaginationParams,
@@ -75,7 +76,7 @@ pub async fn create_redis_instance(
     if let Err(errors) = payload.validate() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error(format!("Validation error: {:?}", errors))),
+            Json(ApiResponse::<()>::error(format!("Validation error: {:?}", errors))),
         ));
     }
 
@@ -93,13 +94,13 @@ pub async fn create_redis_instance(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+            Json(ApiResponse::<()>::error("Organization not found or access denied".to_string())),
         )
     })?;
 
@@ -113,7 +114,7 @@ pub async fn create_redis_instance(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .count
@@ -128,14 +129,14 @@ pub async fn create_redis_instance(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?;
 
     if instance_count >= org_limits.max_redis_instances.unwrap_or(3) as i64 {
         return Err((
             StatusCode::CONFLICT,
-            Json(ApiResponse::error("Organization has reached the maximum number of Redis instances".to_string())),
+            Json(ApiResponse::<()>::error("Organization has reached the maximum number of Redis instances".to_string())),
         ));
     }
 
@@ -150,14 +151,14 @@ pub async fn create_redis_instance(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?;
 
     if existing_instance.is_some() {
         return Err((
             StatusCode::CONFLICT,
-            Json(ApiResponse::error("Redis instance with this slug already exists in the organization".to_string())),
+            Json(ApiResponse::<()>::error("Redis instance with this slug already exists in the organization".to_string())),
         ));
     }
 
@@ -169,7 +170,7 @@ pub async fn create_redis_instance(
     let key_hash = hash_password(&api_key).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Key hashing error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Key hashing error: {}", e))),
         )
     })?;
 
@@ -196,7 +197,7 @@ pub async fn create_redis_instance(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to create API key: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to create API key: {}", e))),
         )
     })?;
 
@@ -205,7 +206,7 @@ pub async fn create_redis_instance(
     let redis_password_hash = hash_password(&redis_password).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Password hashing error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Password hashing error: {}", e))),
         )
     })?;
 
@@ -245,8 +246,8 @@ pub async fn create_redis_instance(
         namespace,
         "creating", // status
         "unknown", // health_status
-        Decimal::new(0, 2), // cpu_usage_percent
-        Decimal::new(0, 2), // memory_usage_percent
+        BigDecimal::new(0.into(), 2), // cpu_usage_percent
+        BigDecimal::new(0.into(), 2), // memory_usage_percent
         0i32, // connections_count
         100i32, // max_connections (default)
         persistence_enabled,
@@ -259,7 +260,7 @@ pub async fn create_redis_instance(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to create Redis instance: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to create Redis instance: {}", e))),
         )
     })?;
 
@@ -274,7 +275,7 @@ pub async fn create_redis_instance(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to fetch created Redis instance: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to fetch created Redis instance: {}", e))),
         )
     })?;
 
@@ -303,13 +304,13 @@ pub async fn list_redis_instances(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+            Json(ApiResponse::<()>::error("Organization not found or access denied".to_string())),
         )
     })?;
 
@@ -335,7 +336,7 @@ pub async fn list_redis_instances(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?;
 
@@ -349,7 +350,7 @@ pub async fn list_redis_instances(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .count
@@ -392,13 +393,13 @@ pub async fn get_redis_instance(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+            Json(ApiResponse::<()>::error("Organization not found or access denied".to_string())),
         )
     })?;
 
@@ -414,13 +415,13 @@ pub async fn get_redis_instance(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("Redis instance not found".to_string())),
+            Json(ApiResponse::<()>::error("Redis instance not found".to_string())),
         )
     })?;
 
@@ -448,20 +449,20 @@ pub async fn delete_redis_instance(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+            Json(ApiResponse::<()>::error("Organization not found or access denied".to_string())),
         )
     })?;
 
     if !["admin", "owner"].contains(&org_membership.role.as_str()) {
         return Err((
             StatusCode::FORBIDDEN,
-            Json(ApiResponse::error("Insufficient permissions to delete Redis instances".to_string())),
+            Json(ApiResponse::<()>::error("Insufficient permissions to delete Redis instances".to_string())),
         ));
     }
 
@@ -476,13 +477,13 @@ pub async fn delete_redis_instance(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("Redis instance not found".to_string())),
+            Json(ApiResponse::<()>::error("Redis instance not found".to_string())),
         )
     })?;
 
@@ -500,7 +501,7 @@ pub async fn delete_redis_instance(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to delete Redis instance: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to delete Redis instance: {}", e))),
         )
     })?;
 
@@ -515,7 +516,7 @@ pub async fn delete_redis_instance(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to deactivate API key: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to deactivate API key: {}", e))),
         )
     })?;
 

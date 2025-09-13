@@ -27,7 +27,7 @@ fn api_key_to_response(api_key: ApiKey) -> ApiKeyResponse {
         name: api_key.name,
         key_prefix: api_key.key_prefix,
         organization_id: api_key.organization_id,
-        scopes: api_key.scopes,
+        scopes: api_key.scopes.unwrap_or_else(|| vec!["read".to_string()]),
         last_used_at: api_key.last_used_at,
         is_active: api_key.is_active.unwrap_or(true),
         expires_at: api_key.expires_at,
@@ -61,7 +61,7 @@ pub async fn create_api_key(
     if let Err(errors) = payload.validate() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error(format!("Validation error: {:?}", errors))),
+            Json(ApiResponse::<()>::error(format!("Validation error: {:?}", errors))),
         ));
     }
 
@@ -79,13 +79,13 @@ pub async fn create_api_key(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+            Json(ApiResponse::<()>::error("Organization not found or access denied".to_string())),
         )
     })?;
 
@@ -99,7 +99,7 @@ pub async fn create_api_key(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .count
@@ -114,14 +114,14 @@ pub async fn create_api_key(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?;
 
-    if api_key_count >= org_limits.max_api_keys as i64 {
+    if api_key_count >= org_limits.max_api_keys.unwrap_or(10) as i64 {
         return Err((
             StatusCode::CONFLICT,
-            Json(ApiResponse::error("Organization has reached the maximum number of API keys".to_string())),
+            Json(ApiResponse::<()>::error("Organization has reached the maximum number of API keys".to_string())),
         ));
     }
 
@@ -131,7 +131,7 @@ pub async fn create_api_key(
     let key_hash = hash_password(&api_key).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Key hashing error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Key hashing error: {}", e))),
         )
     })?;
 
@@ -160,7 +160,7 @@ pub async fn create_api_key(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to create API key: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to create API key: {}", e))),
         )
     })?;
 
@@ -175,7 +175,7 @@ pub async fn create_api_key(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to fetch created API key: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to fetch created API key: {}", e))),
         )
     })?;
 
@@ -209,13 +209,13 @@ pub async fn list_api_keys(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+            Json(ApiResponse::<()>::error("Organization not found or access denied".to_string())),
         )
     })?;
 
@@ -241,7 +241,7 @@ pub async fn list_api_keys(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?;
 
@@ -255,7 +255,7 @@ pub async fn list_api_keys(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .count
@@ -298,13 +298,13 @@ pub async fn get_api_key(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+            Json(ApiResponse::<()>::error("Organization not found or access denied".to_string())),
         )
     })?;
 
@@ -320,13 +320,13 @@ pub async fn get_api_key(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("API key not found".to_string())),
+            Json(ApiResponse::<()>::error("API key not found".to_string())),
         )
     })?;
 
@@ -354,13 +354,13 @@ pub async fn revoke_api_key(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+            Json(ApiResponse::<()>::error("Organization not found or access denied".to_string())),
         )
     })?;
 
@@ -375,13 +375,13 @@ pub async fn revoke_api_key(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("API key not found".to_string())),
+            Json(ApiResponse::<()>::error("API key not found".to_string())),
         )
     })?;
 
@@ -389,7 +389,7 @@ pub async fn revoke_api_key(
     if api_key.user_id != current_user.id && !["admin", "owner"].contains(&org_membership.role.as_str()) {
         return Err((
             StatusCode::FORBIDDEN,
-            Json(ApiResponse::error("Insufficient permissions to revoke this API key".to_string())),
+            Json(ApiResponse::<()>::error("Insufficient permissions to revoke this API key".to_string())),
         ));
     }
 
@@ -406,7 +406,7 @@ pub async fn revoke_api_key(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to revoke API key: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to revoke API key: {}", e))),
         )
     })?;
 

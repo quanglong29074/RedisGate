@@ -45,7 +45,7 @@ pub async fn create_organization(
     if let Err(errors) = payload.validate() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error(format!("Validation error: {:?}", errors))),
+            Json(ApiResponse::<()>::error(format!("Validation error: {:?}", errors))),
         ));
     }
 
@@ -59,14 +59,14 @@ pub async fn create_organization(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?;
 
     if existing_org.is_some() {
         return Err((
             StatusCode::CONFLICT,
-            Json(ApiResponse::error("Organization with this slug already exists".to_string())),
+            Json(ApiResponse::<()>::error("Organization with this slug already exists".to_string())),
         ));
     }
 
@@ -92,7 +92,7 @@ pub async fn create_organization(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to create organization: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to create organization: {}", e))),
         )
     })?;
 
@@ -115,7 +115,7 @@ pub async fn create_organization(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to create organization membership: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to create organization membership: {}", e))),
         )
     })?;
 
@@ -130,7 +130,7 @@ pub async fn create_organization(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to fetch created organization: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to fetch created organization: {}", e))),
         )
     })?;
 
@@ -167,7 +167,7 @@ pub async fn list_organizations(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?;
 
@@ -185,7 +185,7 @@ pub async fn list_organizations(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .count
@@ -230,13 +230,13 @@ pub async fn get_organization(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+            Json(ApiResponse::<()>::error("Organization not found or access denied".to_string())),
         )
     })?;
 
@@ -255,7 +255,7 @@ pub async fn update_organization(
     if let Err(errors) = payload.validate() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error(format!("Validation error: {:?}", errors))),
+            Json(ApiResponse::<()>::error(format!("Validation error: {:?}", errors))),
         ));
     }
 
@@ -273,20 +273,20 @@ pub async fn update_organization(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+            Json(ApiResponse::<()>::error("Organization not found or access denied".to_string())),
         )
     })?;
 
     if org_membership.role != "owner" {
         return Err((
             StatusCode::FORBIDDEN,
-            Json(ApiResponse::error("Only organization owners can update organization details".to_string())),
+            Json(ApiResponse::<()>::error("Only organization owners can update organization details".to_string())),
         ));
     }
 
@@ -301,14 +301,14 @@ pub async fn update_organization(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?;
 
     if existing_org.is_some() {
         return Err((
             StatusCode::CONFLICT,
-            Json(ApiResponse::error("Organization with this slug already exists".to_string())),
+            Json(ApiResponse::<()>::error("Organization with this slug already exists".to_string())),
         ));
     }
 
@@ -332,7 +332,7 @@ pub async fn update_organization(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to update organization: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to update organization: {}", e))),
         )
     })?;
 
@@ -347,7 +347,7 @@ pub async fn update_organization(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to fetch updated organization: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to fetch updated organization: {}", e))),
         )
     })?;
 
@@ -375,20 +375,20 @@ pub async fn delete_organization(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+            Json(ApiResponse::<()>::error("Organization not found or access denied".to_string())),
         )
     })?;
 
     if org_membership.role != "owner" {
         return Err((
             StatusCode::FORBIDDEN,
-            Json(ApiResponse::error("Only organization owners can delete the organization".to_string())),
+            Json(ApiResponse::<()>::error("Only organization owners can delete the organization".to_string())),
         ));
     }
 
@@ -402,7 +402,7 @@ pub async fn delete_organization(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .count
@@ -411,7 +411,7 @@ pub async fn delete_organization(
     if active_instances > 0 {
         return Err((
             StatusCode::CONFLICT,
-            Json(ApiResponse::error("Cannot delete organization with active Redis instances".to_string())),
+            Json(ApiResponse::<()>::error("Cannot delete organization with active Redis instances".to_string())),
         ));
     }
 
@@ -427,7 +427,7 @@ pub async fn delete_organization(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to delete organization: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to delete organization: {}", e))),
         )
     })?;
 
@@ -442,7 +442,7 @@ pub async fn delete_organization(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to deactivate memberships: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to deactivate memberships: {}", e))),
         )
     })?;
 

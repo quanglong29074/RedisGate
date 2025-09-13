@@ -13,6 +13,11 @@ use crate::models::User;
 
 type ErrorResponse = (StatusCode, Json<ApiResponse<()>>);
 
+// Helper function to create error responses
+fn error_response(status: StatusCode, message: String) -> ErrorResponse {
+    (status, Json(ApiResponse::<()>::error(message)))
+}
+
 // Helper function to convert User to UserResponse
 fn user_to_response(user: User) -> UserResponse {
     UserResponse {
@@ -35,7 +40,7 @@ pub async fn register(
     if let Err(errors) = payload.validate() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error(format!("Validation error: {:?}", errors))),
+            Json(ApiResponse::<()>::error(format!("Validation error: {:?}", errors))),
         ));
     }
 
@@ -50,14 +55,14 @@ pub async fn register(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?;
 
     if existing_user.is_some() {
         return Err((
             StatusCode::CONFLICT,
-            Json(ApiResponse::error("User already exists with this email or username".to_string())),
+            Json(ApiResponse::<()>::error("User already exists with this email or username".to_string())),
         ));
     }
 
@@ -65,7 +70,7 @@ pub async fn register(
     let password_hash = hash_password(&payload.password).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Password hashing error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Password hashing error: {}", e))),
         )
     })?;
 
@@ -92,7 +97,7 @@ pub async fn register(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Failed to create user: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Failed to create user: {}", e))),
         )
     })?;
 
@@ -103,7 +108,7 @@ pub async fn register(
         .map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::error(format!("Failed to fetch created user: {}", e))),
+                Json(ApiResponse::<()>::error(format!("Failed to fetch created user: {}", e))),
             )
         })?;
 
@@ -120,7 +125,7 @@ pub async fn login(
     if let Err(errors) = payload.validate() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error(format!("Validation error: {:?}", errors))),
+            Json(ApiResponse::<()>::error(format!("Validation error: {:?}", errors))),
         ));
     }
 
@@ -135,13 +140,13 @@ pub async fn login(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .ok_or_else(|| {
         (
             StatusCode::UNAUTHORIZED,
-            Json(ApiResponse::error("Invalid credentials".to_string())),
+            Json(ApiResponse::<()>::error("Invalid credentials".to_string())),
         )
     })?;
 
@@ -149,7 +154,7 @@ pub async fn login(
     if !user.is_active.unwrap_or(false) {
         return Err((
             StatusCode::UNAUTHORIZED,
-            Json(ApiResponse::error("User account is not active".to_string())),
+            Json(ApiResponse::<()>::error("User account is not active".to_string())),
         ));
     }
 
@@ -157,14 +162,14 @@ pub async fn login(
     let password_valid = verify_password(&payload.password, &user.password_hash).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Password verification error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Password verification error: {}", e))),
         )
     })?;
 
     if !password_valid {
         return Err((
             StatusCode::UNAUTHORIZED,
-            Json(ApiResponse::error("Invalid credentials".to_string())),
+            Json(ApiResponse::<()>::error("Invalid credentials".to_string())),
         ));
     }
 
@@ -178,7 +183,7 @@ pub async fn login(
     .map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Database error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
         )
     })?
     .map(|row| row.organization_id);
@@ -188,7 +193,7 @@ pub async fn login(
     let token = state.jwt_manager.create_token(&claims).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::error(format!("Token creation failed: {:?}", e))),
+            Json(ApiResponse::<()>::error(format!("Token creation failed: {:?}", e))),
         )
     })?;
 

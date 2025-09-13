@@ -122,7 +122,7 @@ pub struct CreateRedisInstanceRequest {
     #[validate(length(min = 1, max = 50), regex(path = "*SLUG_REGEX"))]
     pub slug: String,
     pub organization_id: Uuid,
-    #[validate(range(min = 1048576, max = 17179869184))] // 1MB to 16GB
+    #[validate(range(min = 1048576, max = 17179869184i64))] // 1MB to 16GB
     pub max_memory: i64,
     pub redis_version: Option<String>,
     pub persistence_enabled: Option<bool>,
