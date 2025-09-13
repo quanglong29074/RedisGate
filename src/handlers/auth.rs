@@ -98,9 +98,9 @@ pub async fn register(
         username: user.username,
         first_name: user.first_name,
         last_name: user.last_name,
-        is_active: user.is_active,
-        is_verified: user.is_verified,
-        created_at: user.created_at,
+        is_active: user.is_active.unwrap_or(false),
+        is_verified: user.is_verified.unwrap_or(false),
+        created_at: user.created_at.unwrap_or(Utc::now()),
     };
 
     Ok(Json(ApiResponse::success(user_response)))
@@ -140,7 +140,7 @@ pub async fn login(
     })?;
 
     // Check if user is active
-    if !user.is_active {
+    if !user.is_active.unwrap_or(false) {
         return Err((
             StatusCode::UNAUTHORIZED,
             Json(ApiResponse::error("User account is not active".to_string())),
@@ -192,9 +192,9 @@ pub async fn login(
         username: user.username,
         first_name: user.first_name,
         last_name: user.last_name,
-        is_active: user.is_active,
-        is_verified: user.is_verified,
-        created_at: user.created_at,
+        is_active: user.is_active.unwrap_or(false),
+        is_verified: user.is_verified.unwrap_or(false),
+        created_at: user.created_at.unwrap_or(Utc::now()),
     };
 
     let login_response = LoginResponse {

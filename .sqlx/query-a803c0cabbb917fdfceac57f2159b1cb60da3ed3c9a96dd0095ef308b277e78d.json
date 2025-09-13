@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM api_keys WHERE id = $1 AND organization_id = $2 AND is_active = true",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "key_hash",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "key_prefix",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "organization_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "scopes",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 7,
+        "name": "last_used_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_used_ip",
+        "type_info": "Inet"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "a803c0cabbb917fdfceac57f2159b1cb60da3ed3c9a96dd0095ef308b277e78d"
+}

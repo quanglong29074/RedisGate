@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT role FROM organization_memberships \n        WHERE organization_id = $1 AND user_id = $2 AND is_active = true\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e80cf99714caf64b88e1957c5926f824169220f6c21bd2dadaf7bd8ad3eb40ee"
+}
