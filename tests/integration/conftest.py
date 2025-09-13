@@ -34,7 +34,7 @@ console = Console()
 # Test configuration
 TEST_HOST = "127.0.0.1"
 TEST_PORT = 8080
-TEST_DB_URL = "postgresql://postgres:password@localhost:5432/redisgate_test"
+TEST_DB_URL = "postgresql://redisgate_dev:redisgate_dev_password@localhost:5432/redisgate_dev"
 TEST_JWT_SECRET = "test-jwt-secret-key-for-integration-tests"
 SERVER_TIMEOUT = 60  # seconds to wait for server startup
 CLIENT_TIMEOUT = 10   # seconds for client operations
@@ -204,52 +204,82 @@ class RedisGateClient:
         response = self.client.post(f"{self.base_url}/auth/login", json=data)
         response.raise_for_status()
         result = response.json()
-        if "token" in result:
-            self.auth_token = result["token"]
+        # Extract token from the ApiResponse structure: result.data.token
+        if "data" in result and result["data"] and "token" in result["data"]:
+            self.auth_token = result["data"]["token"]
         return result
     
     async def create_organization(self, name: str, description: str = "") -> Dict[str, Any]:
         """Create a new organization."""
-        data = {"name": name, "description": description}
+        # Generate a slug from the name (URL-friendly version)
+        slug = name.lower().replace(" ", "-").replace("_", "-")
+        # Remove any non-alphanumeric characters except hyphens
+        import re
+        slug = re.sub(r'[^a-z0-9-]', '', slug)
+        
+        data = {
+            "name": name, 
+            "slug": slug,
+            "description": description
+        }
         response = self.client.post(
-            f"{self.base_url}/organizations", 
+            f"{self.base_url}/api/organizations", 
             json=data, 
             headers=self._get_headers()
         )
         response.raise_for_status()
-        return response.json()
+        result = response.json()
+        # Extract the organization data from the ApiResponse structure
+        return result["data"] if "data" in result else result
     
     async def create_redis_instance(self, org_id: str, name: str, 
                                   memory_limit: int = 256) -> Dict[str, Any]:
         """Create a new Redis instance."""
+        # Generate a slug from the name (URL-friendly version)
+        slug = name.lower().replace(" ", "-").replace("_", "-")
+        # Remove any non-alphanumeric characters except hyphens
+        import re
+        slug = re.sub(r'[^a-z0-9-]', '', slug)
+        
+        # Convert memory from MB to bytes (minimum 1MB = 1048576 bytes)
+        memory_bytes = max(memory_limit * 1024 * 1024, 1048576)
+        
         data = {
             "name": name,
-            "memory_limit_mb": memory_limit,
-            "organization_id": org_id
+            "slug": slug,
+            "organization_id": org_id,
+            "max_memory": memory_bytes
         }
         response = self.client.post(
-            f"{self.base_url}/redis-instances", 
+            f"{self.base_url}/api/organizations/{org_id}/redis-instances", 
             json=data, 
             headers=self._get_headers()
         )
         response.raise_for_status()
-        return response.json()
+        result = response.json()
+        # Extract the data from the ApiResponse structure
+        return result["data"] if "data" in result else result
     
     async def create_api_key(self, org_id: str, name: str, 
                            redis_instance_id: str) -> Dict[str, Any]:
         """Create a new API key for Redis instance."""
+        # Standard scopes for Redis access
+        scopes = ["redis:read", "redis:write", "redis:admin"]
+        
         data = {
             "name": name,
             "organization_id": org_id,
-            "redis_instance_id": redis_instance_id
+            "scopes": scopes
         }
         response = self.client.post(
-            f"{self.base_url}/api-keys", 
+            f"{self.base_url}/api/organizations/{org_id}/api-keys", 
             json=data, 
             headers=self._get_headers()
         )
         response.raise_for_status()
-        return response.json()
+        result = response.json()
+        # Extract the data from the ApiResponse structure
+        return result["data"] if "data" in result else result
     
     def close(self):
         """Close the HTTP client."""
