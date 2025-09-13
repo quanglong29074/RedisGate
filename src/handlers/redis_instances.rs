@@ -6,16 +6,17 @@ use axum::{
     response::Json,
 };
 use chrono::Utc;
+use sqlx::{Row, types::BigDecimal};
 use std::sync::Arc;
 use uuid::Uuid;
 use validator::Validate;
-use sqlx::types::BigDecimal;
 
 use crate::api_models::{
     ApiResponse, CreateRedisInstanceRequest, PaginatedResponse, PaginationParams,
     RedisInstanceResponse,
 };
 use crate::auth::hash_password;
+use crate::k8s_service::{K8sRedisService, RedisDeploymentConfig};
 use crate::middleware::{AppState, CurrentUser};
 use crate::models::RedisInstance;
 
@@ -221,43 +222,78 @@ pub async fn create_redis_instance(
     let port = 6379;
     let domain = format!("{}.{}.redis.local", payload.slug, payload.organization_id.simple());
 
-    sqlx::query!(
+    // Deploy to Kubernetes first
+    let k8s_service = K8sRedisService::new().await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Failed to initialize Kubernetes client: {}", e))),
+        )
+    })?;
+
+    let k8s_config = RedisDeploymentConfig {
+        name: payload.name.clone(),
+        slug: payload.slug.clone(),
+        namespace: namespace.clone(),
+        organization_id: payload.organization_id,
+        instance_id,
+        redis_version: redis_version.clone(),
+        max_memory: payload.max_memory,
+        redis_password: redis_password.clone(),
+        port,
+    };
+
+    // Create Kubernetes deployment
+    let k8s_result = k8s_service.create_redis_instance(k8s_config).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Failed to deploy Redis to Kubernetes: {}", e))),
+        )
+    })?;
+
+    sqlx::query(
         r#"
         INSERT INTO redis_instances (
             id, name, slug, organization_id, api_key_id, port, domain,
             max_memory, current_memory, password_hash, redis_version, namespace,
-            status, health_status, cpu_usage_percent, memory_usage_percent,
+            pod_name, service_name, status, health_status, cpu_usage_percent, memory_usage_percent,
             connections_count, max_connections, persistence_enabled, backup_enabled,
             created_at, updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
         "#,
-        instance_id,
-        payload.name,
-        payload.slug,
-        payload.organization_id,
-        api_key_id,
-        port,
-        domain,
-        payload.max_memory,
-        0i64, // current_memory starts at 0
-        Some(redis_password_hash),
-        redis_version,
-        namespace,
-        "creating", // status
-        "unknown", // health_status
-        BigDecimal::new(0.into(), 2), // cpu_usage_percent
-        BigDecimal::new(0.into(), 2), // memory_usage_percent
-        0i32, // connections_count
-        100i32, // max_connections (default)
-        persistence_enabled,
-        backup_enabled,
-        now,
-        now
     )
+    .bind(instance_id)
+    .bind(&payload.name)
+    .bind(&payload.slug)
+    .bind(payload.organization_id)
+    .bind(api_key_id)
+    .bind(k8s_result.port)
+    .bind(&k8s_result.domain)
+    .bind(payload.max_memory)
+    .bind(0i64) // current_memory starts at 0
+    .bind(&redis_password_hash)
+    .bind(&redis_version)
+    .bind(&k8s_result.namespace)
+    .bind(&k8s_result.deployment_name) // pod_name (using deployment name)
+    .bind(&k8s_result.service_name)
+    .bind("creating") // status
+    .bind("unknown") // health_status
+    .bind(BigDecimal::new(0.into(), 2)) // cpu_usage_percent
+    .bind(BigDecimal::new(0.into(), 2)) // memory_usage_percent
+    .bind(0i32) // connections_count
+    .bind(100i32) // max_connections (default)
+    .bind(persistence_enabled)
+    .bind(backup_enabled)
+    .bind(now)
+    .bind(now)
     .execute(&state.db_pool)
     .await
     .map_err(|e| {
+        // If database insert fails, try to clean up K8s resources
+        tokio::spawn(async move {
+            let _ = k8s_service.delete_redis_instance(&k8s_result.namespace, &payload.slug).await;
+        });
+        
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::<()>::error(format!("Failed to create Redis instance: {}", e))),
@@ -467,11 +503,11 @@ pub async fn delete_redis_instance(
     }
 
     // Check if Redis instance exists
-    let redis_instance = sqlx::query!(
-        "SELECT api_key_id FROM redis_instances WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL",
-        instance_id,
-        org_id
+    let redis_instance = sqlx::query(
+        "SELECT api_key_id, namespace, slug FROM redis_instances WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL",
     )
+    .bind(instance_id)
+    .bind(org_id)
     .fetch_optional(&state.db_pool)
     .await
     .map_err(|e| {
@@ -488,6 +524,32 @@ pub async fn delete_redis_instance(
     })?;
 
     let now = Utc::now();
+
+    // Delete from Kubernetes first
+    let k8s_service = K8sRedisService::new().await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Failed to initialize Kubernetes client: {}", e))),
+        )
+    })?;
+
+    let namespace: Option<String> = redis_instance.try_get("namespace").ok();
+    let slug: Option<String> = redis_instance.try_get("slug").ok();
+    let api_key_id: uuid::Uuid = redis_instance.try_get("api_key_id").map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Database field error: {}", e))),
+        )
+    })?;
+
+    if let (Some(namespace), Some(slug)) = (&namespace, &slug) {
+        k8s_service.delete_redis_instance(namespace, slug).await.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<()>::error(format!("Failed to delete Redis from Kubernetes: {}", e))),
+            )
+        })?;
+    }
 
     // Soft delete Redis instance
     sqlx::query!(
@@ -509,7 +571,7 @@ pub async fn delete_redis_instance(
     sqlx::query!(
         "UPDATE api_keys SET is_active = false, updated_at = $1 WHERE id = $2",
         now,
-        redis_instance.api_key_id
+        api_key_id
     )
     .execute(&state.db_pool)
     .await
@@ -526,4 +588,120 @@ pub async fn delete_redis_instance(
         message: Some("Redis instance deleted successfully".to_string()),
         timestamp: Utc::now(),
     }))
+}
+
+pub async fn update_redis_instance_status(
+    State(state): State<Arc<AppState>>,
+    Extension(current_user): Extension<CurrentUser>,
+    Path((org_id, instance_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ApiResponse<RedisInstanceResponse>>, ErrorResponse> {
+    // Check if user has access to the organization
+    let _org_membership = sqlx::query!(
+        r#"
+        SELECT role FROM organization_memberships 
+        WHERE organization_id = $1 AND user_id = $2 AND is_active = true
+        "#,
+        org_id,
+        current_user.id
+    )
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
+        )
+    })?
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::<()>::error("Organization not found or access denied".to_string())),
+        )
+    })?;
+
+    // Get Redis instance
+    let redis_instance = sqlx::query(
+        "SELECT namespace, slug, status FROM redis_instances WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL",
+    )
+    .bind(instance_id)
+    .bind(org_id)
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
+        )
+    })?
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::<()>::error("Redis instance not found".to_string())),
+        )
+    })?;
+
+    // Check Kubernetes deployment status
+    let namespace: Option<String> = redis_instance.try_get("namespace").ok();
+    let slug: Option<String> = redis_instance.try_get("slug").ok();
+    let current_status: Option<String> = redis_instance.try_get("status").ok();
+
+    if let (Some(namespace), Some(slug)) = (&namespace, &slug) {
+        let k8s_service = K8sRedisService::new().await.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<()>::error(format!("Failed to initialize Kubernetes client: {}", e))),
+            )
+        })?;
+
+        let k8s_status = k8s_service.get_deployment_status(namespace, slug).await.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<()>::error(format!("Failed to check Kubernetes status: {}", e))),
+            )
+        })?;
+
+        // Update status in database if it changed
+        if current_status.as_deref() != Some(&k8s_status) {
+            sqlx::query(
+                "UPDATE redis_instances SET status = $1, updated_at = $2 WHERE id = $3",
+            )
+            .bind(&k8s_status)
+            .bind(chrono::Utc::now())
+            .bind(instance_id)
+            .execute(&state.db_pool)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::<()>::error(format!("Failed to update status: {}", e))),
+                )
+            })?;
+        }
+    }
+
+    // Fetch updated instance
+    let updated_instance = sqlx::query_as!(
+        RedisInstance,
+        "SELECT * FROM redis_instances WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL",
+        instance_id,
+        org_id
+    )
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(format!("Database error: {}", e))),
+        )
+    })?
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::<()>::error("Redis instance not found".to_string())),
+        )
+    })?;
+
+    let instance_response = redis_instance_to_response(updated_instance);
+
+    Ok(Json(ApiResponse::success(instance_response)))
 }
