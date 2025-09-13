@@ -6,7 +6,6 @@ use axum::{
     response::Json,
 };
 use chrono::Utc;
-use rust_decimal::Decimal;
 use std::sync::Arc;
 use uuid::Uuid;
 use validator::Validate;
@@ -17,7 +16,41 @@ use crate::api_models::{
 };
 use crate::auth::hash_password;
 use crate::middleware::{AppState, CurrentUser};
-use crate::models::{ApiKey, RedisInstance};
+use crate::models::RedisInstance;
+
+type ErrorResponse = (StatusCode, Json<ApiResponse<()>>);
+
+// Helper function to convert RedisInstance to RedisInstanceResponse
+fn redis_instance_to_response(redis_instance: RedisInstance) -> RedisInstanceResponse {
+    RedisInstanceResponse {
+        id: redis_instance.id,
+        name: redis_instance.name,
+        slug: redis_instance.slug,
+        organization_id: redis_instance.organization_id,
+        api_key_id: redis_instance.api_key_id,
+        port: redis_instance.port.unwrap_or(6379),
+        domain: redis_instance.domain,
+        max_memory: redis_instance.max_memory.unwrap_or(0),
+        current_memory: redis_instance.current_memory.unwrap_or(0),
+        redis_version: redis_instance.redis_version.unwrap_or_else(|| "7.0".to_string()),
+        namespace: redis_instance.namespace.unwrap_or_else(|| "default".to_string()),
+        status: redis_instance.status.unwrap_or_else(|| "unknown".to_string()),
+        health_status: redis_instance.health_status.unwrap_or_else(|| "unknown".to_string()),
+        cpu_usage_percent: redis_instance.cpu_usage_percent
+            .map(|d| d.to_string().parse::<f64>().unwrap_or(0.0))
+            .unwrap_or(0.0),
+        memory_usage_percent: redis_instance.memory_usage_percent
+            .map(|d| d.to_string().parse::<f64>().unwrap_or(0.0))
+            .unwrap_or(0.0),
+        connections_count: redis_instance.connections_count.unwrap_or(0),
+        max_connections: redis_instance.max_connections.unwrap_or(1000),
+        persistence_enabled: redis_instance.persistence_enabled.unwrap_or(false),
+        backup_enabled: redis_instance.backup_enabled.unwrap_or(false),
+        last_backup_at: redis_instance.last_backup_at,
+        created_at: redis_instance.created_at.unwrap_or_else(|| Utc::now()),
+        updated_at: redis_instance.updated_at.unwrap_or_else(|| Utc::now()),
+    }
+}
 
 // Generate a secure Redis password
 fn generate_redis_password() -> String {
@@ -37,7 +70,7 @@ pub async fn create_redis_instance(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<CurrentUser>,
     Json(payload): Json<CreateRedisInstanceRequest>,
-) -> Result<Json<ApiResponse<RedisInstanceResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<RedisInstanceResponse>>, ErrorResponse> {
     // Validate input
     if let Err(errors) = payload.validate() {
         return Err((
@@ -99,7 +132,7 @@ pub async fn create_redis_instance(
         )
     })?;
 
-    if instance_count >= org_limits.max_redis_instances as i64 {
+    if instance_count >= org_limits.max_redis_instances.unwrap_or(3) as i64 {
         return Err((
             StatusCode::CONFLICT,
             Json(ApiResponse::error("Organization has reached the maximum number of Redis instances".to_string())),
@@ -245,30 +278,7 @@ pub async fn create_redis_instance(
         )
     })?;
 
-    let instance_response = RedisInstanceResponse {
-        id: redis_instance.id,
-        name: redis_instance.name,
-        slug: redis_instance.slug,
-        organization_id: redis_instance.organization_id,
-        api_key_id: redis_instance.api_key_id,
-        port: redis_instance.port,
-        domain: redis_instance.domain,
-        max_memory: redis_instance.max_memory,
-        current_memory: redis_instance.current_memory,
-        redis_version: redis_instance.redis_version,
-        namespace: redis_instance.namespace,
-        status: redis_instance.status,
-        health_status: redis_instance.health_status,
-        cpu_usage_percent: redis_instance.cpu_usage_percent,
-        memory_usage_percent: redis_instance.memory_usage_percent,
-        connections_count: redis_instance.connections_count,
-        max_connections: redis_instance.max_connections,
-        persistence_enabled: redis_instance.persistence_enabled,
-        backup_enabled: redis_instance.backup_enabled,
-        last_backup_at: redis_instance.last_backup_at,
-        created_at: redis_instance.created_at,
-        updated_at: redis_instance.updated_at,
-    };
+    let instance_response = redis_instance_to_response(redis_instance);
 
     Ok(Json(ApiResponse::success(instance_response)))
 }
@@ -278,7 +288,7 @@ pub async fn list_redis_instances(
     Extension(current_user): Extension<CurrentUser>,
     Query(params): Query<PaginationParams>,
     Path(org_id): Path<Uuid>,
-) -> Result<Json<ApiResponse<PaginatedResponse<RedisInstanceResponse>>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<PaginatedResponse<RedisInstanceResponse>>>, ErrorResponse> {
     // Check if user has access to the organization
     let _org_membership = sqlx::query!(
         r#"
@@ -347,30 +357,7 @@ pub async fn list_redis_instances(
 
     let instance_responses: Vec<RedisInstanceResponse> = redis_instances
         .into_iter()
-        .map(|instance| RedisInstanceResponse {
-            id: instance.id,
-            name: instance.name,
-            slug: instance.slug,
-            organization_id: instance.organization_id,
-            api_key_id: instance.api_key_id,
-            port: instance.port,
-            domain: instance.domain,
-            max_memory: instance.max_memory,
-            current_memory: instance.current_memory,
-            redis_version: instance.redis_version,
-            namespace: instance.namespace,
-            status: instance.status,
-            health_status: instance.health_status,
-            cpu_usage_percent: instance.cpu_usage_percent,
-            memory_usage_percent: instance.memory_usage_percent,
-            connections_count: instance.connections_count,
-            max_connections: instance.max_connections,
-            persistence_enabled: instance.persistence_enabled,
-            backup_enabled: instance.backup_enabled,
-            last_backup_at: instance.last_backup_at,
-            created_at: instance.created_at,
-            updated_at: instance.updated_at,
-        })
+        .map(redis_instance_to_response)
         .collect();
 
     let total_pages = ((total_count as f64) / (limit as f64)).ceil() as u32;
@@ -390,7 +377,7 @@ pub async fn get_redis_instance(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<CurrentUser>,
     Path((org_id, instance_id)): Path<(Uuid, Uuid)>,
-) -> Result<Json<ApiResponse<RedisInstanceResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<RedisInstanceResponse>>, ErrorResponse> {
     // Check if user has access to the organization
     let _org_membership = sqlx::query!(
         r#"
@@ -437,30 +424,7 @@ pub async fn get_redis_instance(
         )
     })?;
 
-    let instance_response = RedisInstanceResponse {
-        id: redis_instance.id,
-        name: redis_instance.name,
-        slug: redis_instance.slug,
-        organization_id: redis_instance.organization_id,
-        api_key_id: redis_instance.api_key_id,
-        port: redis_instance.port,
-        domain: redis_instance.domain,
-        max_memory: redis_instance.max_memory,
-        current_memory: redis_instance.current_memory,
-        redis_version: redis_instance.redis_version,
-        namespace: redis_instance.namespace,
-        status: redis_instance.status,
-        health_status: redis_instance.health_status,
-        cpu_usage_percent: redis_instance.cpu_usage_percent,
-        memory_usage_percent: redis_instance.memory_usage_percent,
-        connections_count: redis_instance.connections_count,
-        max_connections: redis_instance.max_connections,
-        persistence_enabled: redis_instance.persistence_enabled,
-        backup_enabled: redis_instance.backup_enabled,
-        last_backup_at: redis_instance.last_backup_at,
-        created_at: redis_instance.created_at,
-        updated_at: redis_instance.updated_at,
-    };
+    let instance_response = redis_instance_to_response(redis_instance);
 
     Ok(Json(ApiResponse::success(instance_response)))
 }
@@ -469,7 +433,7 @@ pub async fn delete_redis_instance(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<CurrentUser>,
     Path((org_id, instance_id)): Path<(Uuid, Uuid)>,
-) -> Result<Json<ApiResponse<()>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<()>>, ErrorResponse> {
     // Check if user has admin access to the organization
     let org_membership = sqlx::query!(
         r#"

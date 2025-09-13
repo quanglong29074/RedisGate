@@ -18,6 +18,23 @@ use crate::auth::hash_password;
 use crate::middleware::{AppState, CurrentUser};
 use crate::models::ApiKey;
 
+type ErrorResponse = (StatusCode, Json<ApiResponse<()>>);
+
+// Helper function to convert ApiKey to ApiKeyResponse
+fn api_key_to_response(api_key: ApiKey) -> ApiKeyResponse {
+    ApiKeyResponse {
+        id: api_key.id,
+        name: api_key.name,
+        key_prefix: api_key.key_prefix,
+        organization_id: api_key.organization_id,
+        scopes: api_key.scopes,
+        last_used_at: api_key.last_used_at,
+        is_active: api_key.is_active.unwrap_or(true),
+        expires_at: api_key.expires_at,
+        created_at: api_key.created_at.unwrap_or_else(|| Utc::now()),
+    }
+}
+
 // Generate a random API key
 fn generate_api_key() -> String {
     use rand::Rng;
@@ -39,7 +56,7 @@ pub async fn create_api_key(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<CurrentUser>,
     Json(payload): Json<CreateApiKeyRequest>,
-) -> Result<Json<ApiResponse<ApiKeyCreationResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<ApiKeyCreationResponse>>, ErrorResponse> {
     // Validate input
     if let Err(errors) = payload.validate() {
         return Err((
@@ -162,17 +179,7 @@ pub async fn create_api_key(
         )
     })?;
 
-    let api_key_response = ApiKeyResponse {
-        id: created_key.id,
-        name: created_key.name,
-        key_prefix: created_key.key_prefix,
-        organization_id: created_key.organization_id,
-        scopes: created_key.scopes,
-        last_used_at: created_key.last_used_at,
-        is_active: created_key.is_active,
-        expires_at: created_key.expires_at,
-        created_at: created_key.created_at,
-    };
+    let api_key_response = api_key_to_response(created_key);
 
     let creation_response = ApiKeyCreationResponse {
         api_key: api_key_response,
@@ -187,7 +194,7 @@ pub async fn list_api_keys(
     Extension(current_user): Extension<CurrentUser>,
     Query(params): Query<PaginationParams>,
     Path(org_id): Path<Uuid>,
-) -> Result<Json<ApiResponse<PaginatedResponse<ApiKeyResponse>>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<PaginatedResponse<ApiKeyResponse>>>, ErrorResponse> {
     // Check if user has access to the organization
     let _org_membership = sqlx::query!(
         r#"
@@ -256,17 +263,7 @@ pub async fn list_api_keys(
 
     let api_key_responses: Vec<ApiKeyResponse> = api_keys
         .into_iter()
-        .map(|key| ApiKeyResponse {
-            id: key.id,
-            name: key.name,
-            key_prefix: key.key_prefix,
-            organization_id: key.organization_id,
-            scopes: key.scopes,
-            last_used_at: key.last_used_at,
-            is_active: key.is_active,
-            expires_at: key.expires_at,
-            created_at: key.created_at,
-        })
+        .map(api_key_to_response)
         .collect();
 
     let total_pages = ((total_count as f64) / (limit as f64)).ceil() as u32;
@@ -286,7 +283,7 @@ pub async fn get_api_key(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<CurrentUser>,
     Path((org_id, key_id)): Path<(Uuid, Uuid)>,
-) -> Result<Json<ApiResponse<ApiKeyResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<ApiKeyResponse>>, ErrorResponse> {
     // Check if user has access to the organization
     let _org_membership = sqlx::query!(
         r#"
@@ -333,17 +330,7 @@ pub async fn get_api_key(
         )
     })?;
 
-    let api_key_response = ApiKeyResponse {
-        id: api_key.id,
-        name: api_key.name,
-        key_prefix: api_key.key_prefix,
-        organization_id: api_key.organization_id,
-        scopes: api_key.scopes,
-        last_used_at: api_key.last_used_at,
-        is_active: api_key.is_active,
-        expires_at: api_key.expires_at,
-        created_at: api_key.created_at,
-    };
+    let api_key_response = api_key_to_response(api_key);
 
     Ok(Json(ApiResponse::success(api_key_response)))
 }
@@ -352,7 +339,7 @@ pub async fn revoke_api_key(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<CurrentUser>,
     Path((org_id, key_id)): Path<(Uuid, Uuid)>,
-) -> Result<Json<ApiResponse<()>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<()>>, ErrorResponse> {
     // Check if user has access to the organization
     let org_membership = sqlx::query!(
         r#"

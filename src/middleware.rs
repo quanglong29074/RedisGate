@@ -2,14 +2,14 @@
 
 use axum::{
     extract::{Request, State},
-    http::{header::AUTHORIZATION, StatusCode},
+    http::header::AUTHORIZATION,
     middleware::Next,
     response::Response,
 };
 use sqlx::PgPool;
 use std::sync::Arc;
 
-use crate::auth::{AuthError, Claims, JwtManager};
+use crate::auth::{AuthError, JwtManager};
 use crate::models::User;
 
 // Middleware for JWT authentication
@@ -39,7 +39,7 @@ pub async fn auth_middleware(
     .map_err(|_| AuthError::UserNotFound)?
     .ok_or(AuthError::UserNotFound)?;
 
-    if !user.is_active {
+    if !user.is_active.unwrap_or(true) {
         return Err(AuthError::UserNotActive);
     }
 

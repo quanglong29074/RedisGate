@@ -2,7 +2,7 @@
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, TokenData, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

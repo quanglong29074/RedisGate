@@ -4,9 +4,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use std::net::IpAddr;
 use uuid::Uuid;
-use bigdecimal::BigDecimal;
+use sqlx::types::BigDecimal;
+use ipnetwork;
 
 #[derive(Debug, FromRow, Serialize, Deserialize)]
 pub struct User {

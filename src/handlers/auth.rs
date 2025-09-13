@@ -2,20 +2,35 @@
 
 use axum::{extract::State, http::StatusCode, response::Json};
 use chrono::Utc;
-use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
 use validator::Validate;
 
 use crate::api_models::{ApiResponse, LoginRequest, LoginResponse, RegisterRequest, UserResponse};
-use crate::auth::{hash_password, verify_password, AuthError, Claims};
+use crate::auth::{hash_password, verify_password, Claims};
 use crate::middleware::AppState;
 use crate::models::User;
+
+type ErrorResponse = (StatusCode, Json<ApiResponse<()>>);
+
+// Helper function to convert User to UserResponse
+fn user_to_response(user: User) -> UserResponse {
+    UserResponse {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        is_active: user.is_active.unwrap_or(true),
+        is_verified: user.is_verified.unwrap_or(false),
+        created_at: user.created_at.unwrap_or_else(|| Utc::now()),
+    }
+}
 
 pub async fn register(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<RegisterRequest>,
-) -> Result<Json<ApiResponse<UserResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<UserResponse>>, ErrorResponse> {
     // Validate input
     if let Err(errors) = payload.validate() {
         return Err((
@@ -92,16 +107,7 @@ pub async fn register(
             )
         })?;
 
-    let user_response = UserResponse {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        is_active: user.is_active.unwrap_or(false),
-        is_verified: user.is_verified.unwrap_or(false),
-        created_at: user.created_at.unwrap_or(Utc::now()),
-    };
+    let user_response = user_to_response(user);
 
     Ok(Json(ApiResponse::success(user_response)))
 }
@@ -109,7 +115,7 @@ pub async fn register(
 pub async fn login(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<LoginRequest>,
-) -> Result<Json<ApiResponse<LoginResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<LoginResponse>>, ErrorResponse> {
     // Validate input
     if let Err(errors) = payload.validate() {
         return Err((
@@ -186,16 +192,7 @@ pub async fn login(
         )
     })?;
 
-    let user_response = UserResponse {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        is_active: user.is_active.unwrap_or(false),
-        is_verified: user.is_verified.unwrap_or(false),
-        created_at: user.created_at.unwrap_or(Utc::now()),
-    };
+    let user_response = user_to_response(user);
 
     let login_response = LoginResponse {
         token,

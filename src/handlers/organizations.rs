@@ -15,13 +15,32 @@ use crate::api_models::{
     PaginationParams,
 };
 use crate::middleware::{AppState, CurrentUser};
-use crate::models::{Organization, OrganizationMembership};
+use crate::models::Organization;
+
+type ErrorResponse = (StatusCode, Json<ApiResponse<()>>);
+
+// Helper function to convert Organization to OrganizationResponse
+fn organization_to_response(organization: Organization) -> OrganizationResponse {
+    OrganizationResponse {
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+        description: organization.description,
+        owner_id: organization.owner_id,
+        is_active: organization.is_active.unwrap_or(true),
+        plan: organization.plan.unwrap_or_else(|| "free".to_string()),
+        max_redis_instances: organization.max_redis_instances.unwrap_or(3),
+        max_api_keys: organization.max_api_keys.unwrap_or(10),
+        created_at: organization.created_at.unwrap_or_else(|| Utc::now()),
+        updated_at: organization.updated_at.unwrap_or_else(|| Utc::now()),
+    }
+}
 
 pub async fn create_organization(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<CurrentUser>,
     Json(payload): Json<CreateOrganizationRequest>,
-) -> Result<Json<ApiResponse<OrganizationResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<OrganizationResponse>>, ErrorResponse> {
     // Validate input
     if let Err(errors) = payload.validate() {
         return Err((
@@ -115,19 +134,7 @@ pub async fn create_organization(
         )
     })?;
 
-    let org_response = OrganizationResponse {
-        id: organization.id,
-        name: organization.name,
-        slug: organization.slug,
-        description: organization.description,
-        owner_id: organization.owner_id,
-        is_active: organization.is_active,
-        plan: organization.plan,
-        max_redis_instances: organization.max_redis_instances,
-        max_api_keys: organization.max_api_keys,
-        created_at: organization.created_at,
-        updated_at: organization.updated_at,
-    };
+    let org_response = organization_to_response(organization);
 
     Ok(Json(ApiResponse::success(org_response)))
 }
@@ -136,7 +143,7 @@ pub async fn list_organizations(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<CurrentUser>,
     Query(params): Query<PaginationParams>,
-) -> Result<Json<ApiResponse<PaginatedResponse<OrganizationResponse>>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<PaginatedResponse<OrganizationResponse>>>, ErrorResponse> {
     let page = params.page.unwrap_or(1);
     let limit = params.limit.unwrap_or(20).min(100); // Max 100 items per page
     let offset = (page - 1) * limit;
@@ -186,19 +193,7 @@ pub async fn list_organizations(
 
     let org_responses: Vec<OrganizationResponse> = organizations
         .into_iter()
-        .map(|org| OrganizationResponse {
-            id: org.id,
-            name: org.name,
-            slug: org.slug,
-            description: org.description,
-            owner_id: org.owner_id,
-            is_active: org.is_active,
-            plan: org.plan,
-            max_redis_instances: org.max_redis_instances,
-            max_api_keys: org.max_api_keys,
-            created_at: org.created_at,
-            updated_at: org.updated_at,
-        })
+        .map(organization_to_response)
         .collect();
 
     let total_pages = ((total_count as f64) / (limit as f64)).ceil() as u32;
@@ -218,7 +213,7 @@ pub async fn get_organization(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<CurrentUser>,
     Path(org_id): Path<Uuid>,
-) -> Result<Json<ApiResponse<OrganizationResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<OrganizationResponse>>, ErrorResponse> {
     // Check if user has access to this organization
     let organization = sqlx::query_as!(
         Organization,
@@ -245,19 +240,7 @@ pub async fn get_organization(
         )
     })?;
 
-    let org_response = OrganizationResponse {
-        id: organization.id,
-        name: organization.name,
-        slug: organization.slug,
-        description: organization.description,
-        owner_id: organization.owner_id,
-        is_active: organization.is_active,
-        plan: organization.plan,
-        max_redis_instances: organization.max_redis_instances,
-        max_api_keys: organization.max_api_keys,
-        created_at: organization.created_at,
-        updated_at: organization.updated_at,
-    };
+    let org_response = organization_to_response(organization);
 
     Ok(Json(ApiResponse::success(org_response)))
 }
@@ -267,7 +250,7 @@ pub async fn update_organization(
     Extension(current_user): Extension<CurrentUser>,
     Path(org_id): Path<Uuid>,
     Json(payload): Json<CreateOrganizationRequest>, // Reusing the same request struct
-) -> Result<Json<ApiResponse<OrganizationResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<OrganizationResponse>>, ErrorResponse> {
     // Validate input
     if let Err(errors) = payload.validate() {
         return Err((
@@ -368,19 +351,7 @@ pub async fn update_organization(
         )
     })?;
 
-    let org_response = OrganizationResponse {
-        id: organization.id,
-        name: organization.name,
-        slug: organization.slug,
-        description: organization.description,
-        owner_id: organization.owner_id,
-        is_active: organization.is_active,
-        plan: organization.plan,
-        max_redis_instances: organization.max_redis_instances,
-        max_api_keys: organization.max_api_keys,
-        created_at: organization.created_at,
-        updated_at: organization.updated_at,
-    };
+    let org_response = organization_to_response(organization);
 
     Ok(Json(ApiResponse::success(org_response)))
 }
@@ -389,7 +360,7 @@ pub async fn delete_organization(
     State(state): State<Arc<AppState>>,
     Extension(current_user): Extension<CurrentUser>,
     Path(org_id): Path<Uuid>,
-) -> Result<Json<ApiResponse<()>>, (StatusCode, Json<ApiResponse<()>>)> {
+) -> Result<Json<ApiResponse<()>>, ErrorResponse> {
     // Check if user is owner of this organization
     let org_membership = sqlx::query!(
         r#"
