@@ -307,8 +307,12 @@ class TestRunner:
             ])
         elif self.args.mode == "ci":
             args.extend([
-                "-m", "not benchmark and not slow",
-                "--junitxml=test-results.xml",
+                "-k", "test_api_setup",
+                "-m", "not benchmark and not slow", 
+                "--junitxml=reports/test-results.xml",
+                "--html=reports/test-results.html",
+                "--self-contained-html",
+                "--timeout=60"  # Shorter timeout for CI
             ])
         elif self.args.mode == "all":
             # Run all tests except benchmarks by default

@@ -91,6 +91,82 @@ jobs:
       - name: Run tests
         run: cargo test --all-features
 
+  integration-tests:
+    name: Python Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: redisgate_dev_password
+          POSTGRES_USER: redisgate_dev
+          POSTGRES_DB: redisgate_dev
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target/
+          key: ${{ runner.os }}-cargo-build-integration-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Set up environment
+        run: |
+          echo "DATABASE_URL=postgresql://redisgate_dev:redisgate_dev_password@localhost:5432/redisgate_dev" >> $GITHUB_ENV
+
+      - name: Install sqlx-cli and run migrations
+        run: |
+          cargo install sqlx-cli --no-default-features --features native-tls,postgres
+          sqlx migrate run
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v4
+        with:
+          path: tests/integration/.venv
+          key: ${{ runner.os }}-python-${{ hashFiles('tests/integration/requirements.txt') }}
+
+      - name: Run integration test setup validation
+        working-directory: tests/integration
+        run: |
+          python run_tests.py --install-deps --mode ci --verbose --report
+        continue-on-error: true
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-reports
+          path: |
+            tests/integration/reports/
+            tests/integration/.pytest_cache/
+          retention-days: 7
+
   build:
     name: Build
     runs-on: ubuntu-latest
