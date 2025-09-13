@@ -1,0 +1,432 @@
+// API key management handlers
+
+use axum::{
+    extract::{Extension, Path, Query, State},
+    http::StatusCode,
+    response::Json,
+};
+use chrono::Utc;
+use std::sync::Arc;
+use uuid::Uuid;
+use validator::Validate;
+
+use crate::api_models::{
+    ApiKeyCreationResponse, ApiKeyResponse, ApiResponse, CreateApiKeyRequest, PaginatedResponse,
+    PaginationParams,
+};
+use crate::auth::hash_password;
+use crate::middleware::{AppState, CurrentUser};
+use crate::models::ApiKey;
+
+// Generate a random API key
+fn generate_api_key() -> String {
+    use rand::Rng;
+    const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let mut rng = rand::thread_rng();
+    
+    let prefix = "rg"; // RedisGate prefix
+    let random_part: String = (0..32)
+        .map(|_| {
+            let idx = rng.gen_range(0..CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect();
+    
+    format!("{}{}", prefix, random_part)
+}
+
+pub async fn create_api_key(
+    State(state): State<Arc<AppState>>,
+    Extension(current_user): Extension<CurrentUser>,
+    Json(payload): Json<CreateApiKeyRequest>,
+) -> Result<Json<ApiResponse<ApiKeyCreationResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+    // Validate input
+    if let Err(errors) = payload.validate() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error(format!("Validation error: {:?}", errors))),
+        ));
+    }
+
+    // Check if user has access to the organization
+    let org_membership = sqlx::query!(
+        r#"
+        SELECT role FROM organization_memberships 
+        WHERE organization_id = $1 AND user_id = $2 AND is_active = true
+        "#,
+        payload.organization_id,
+        current_user.id
+    )
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error(format!("Database error: {}", e))),
+        )
+    })?
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+        )
+    })?;
+
+    // Check if organization has reached API key limit
+    let api_key_count = sqlx::query!(
+        "SELECT COUNT(*) as count FROM api_keys WHERE organization_id = $1 AND is_active = true",
+        payload.organization_id
+    )
+    .fetch_one(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error(format!("Database error: {}", e))),
+        )
+    })?
+    .count
+    .unwrap_or(0);
+
+    let org_limits = sqlx::query!(
+        "SELECT max_api_keys FROM organizations WHERE id = $1",
+        payload.organization_id
+    )
+    .fetch_one(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error(format!("Database error: {}", e))),
+        )
+    })?;
+
+    if api_key_count >= org_limits.max_api_keys as i64 {
+        return Err((
+            StatusCode::CONFLICT,
+            Json(ApiResponse::error("Organization has reached the maximum number of API keys".to_string())),
+        ));
+    }
+
+    // Generate API key
+    let api_key = generate_api_key();
+    let key_prefix = api_key.chars().take(8).collect::<String>(); // Store first 8 chars for identification
+    let key_hash = hash_password(&api_key).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error(format!("Key hashing error: {}", e))),
+        )
+    })?;
+
+    let api_key_id = Uuid::new_v4();
+    let now = Utc::now();
+
+    // Create API key record
+    sqlx::query!(
+        r#"
+        INSERT INTO api_keys (id, name, key_hash, key_prefix, user_id, organization_id, scopes, expires_at, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        "#,
+        api_key_id,
+        payload.name,
+        key_hash,
+        key_prefix,
+        current_user.id,
+        payload.organization_id,
+        &payload.scopes,
+        payload.expires_at,
+        now,
+        now
+    )
+    .execute(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error(format!("Failed to create API key: {}", e))),
+        )
+    })?;
+
+    // Fetch created API key
+    let created_key = sqlx::query_as!(
+        ApiKey,
+        "SELECT * FROM api_keys WHERE id = $1",
+        api_key_id
+    )
+    .fetch_one(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error(format!("Failed to fetch created API key: {}", e))),
+        )
+    })?;
+
+    let api_key_response = ApiKeyResponse {
+        id: created_key.id,
+        name: created_key.name,
+        key_prefix: created_key.key_prefix,
+        organization_id: created_key.organization_id,
+        scopes: created_key.scopes,
+        last_used_at: created_key.last_used_at,
+        is_active: created_key.is_active,
+        expires_at: created_key.expires_at,
+        created_at: created_key.created_at,
+    };
+
+    let creation_response = ApiKeyCreationResponse {
+        api_key: api_key_response,
+        key: api_key, // Only returned on creation
+    };
+
+    Ok(Json(ApiResponse::success(creation_response)))
+}
+
+pub async fn list_api_keys(
+    State(state): State<Arc<AppState>>,
+    Extension(current_user): Extension<CurrentUser>,
+    Query(params): Query<PaginationParams>,
+    Path(org_id): Path<Uuid>,
+) -> Result<Json<ApiResponse<PaginatedResponse<ApiKeyResponse>>>, (StatusCode, Json<ApiResponse<()>>)> {
+    // Check if user has access to the organization
+    let _org_membership = sqlx::query!(
+        r#"
+        SELECT role FROM organization_memberships 
+        WHERE organization_id = $1 AND user_id = $2 AND is_active = true
+        "#,
+        org_id,
+        current_user.id
+    )
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error(format!("Database error: {}", e))),
+        )
+    })?
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+        )
+    })?;
+
+    let page = params.page.unwrap_or(1);
+    let limit = params.limit.unwrap_or(20).min(100);
+    let offset = (page - 1) * limit;
+
+    // Get API keys for the organization
+    let api_keys = sqlx::query_as!(
+        ApiKey,
+        r#"
+        SELECT * FROM api_keys 
+        WHERE organization_id = $1 AND is_active = true
+        ORDER BY created_at DESC
+        LIMIT $2 OFFSET $3
+        "#,
+        org_id,
+        limit as i64,
+        offset as i64
+    )
+    .fetch_all(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error(format!("Database error: {}", e))),
+        )
+    })?;
+
+    // Get total count
+    let total_count = sqlx::query!(
+        "SELECT COUNT(*) as count FROM api_keys WHERE organization_id = $1 AND is_active = true",
+        org_id
+    )
+    .fetch_one(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error(format!("Database error: {}", e))),
+        )
+    })?
+    .count
+    .unwrap_or(0);
+
+    let api_key_responses: Vec<ApiKeyResponse> = api_keys
+        .into_iter()
+        .map(|key| ApiKeyResponse {
+            id: key.id,
+            name: key.name,
+            key_prefix: key.key_prefix,
+            organization_id: key.organization_id,
+            scopes: key.scopes,
+            last_used_at: key.last_used_at,
+            is_active: key.is_active,
+            expires_at: key.expires_at,
+            created_at: key.created_at,
+        })
+        .collect();
+
+    let total_pages = ((total_count as f64) / (limit as f64)).ceil() as u32;
+
+    let paginated_response = PaginatedResponse {
+        items: api_key_responses,
+        total_count,
+        page,
+        limit,
+        total_pages,
+    };
+
+    Ok(Json(ApiResponse::success(paginated_response)))
+}
+
+pub async fn get_api_key(
+    State(state): State<Arc<AppState>>,
+    Extension(current_user): Extension<CurrentUser>,
+    Path((org_id, key_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ApiResponse<ApiKeyResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+    // Check if user has access to the organization
+    let _org_membership = sqlx::query!(
+        r#"
+        SELECT role FROM organization_memberships 
+        WHERE organization_id = $1 AND user_id = $2 AND is_active = true
+        "#,
+        org_id,
+        current_user.id
+    )
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error(format!("Database error: {}", e))),
+        )
+    })?
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+        )
+    })?;
+
+    // Get API key
+    let api_key = sqlx::query_as!(
+        ApiKey,
+        "SELECT * FROM api_keys WHERE id = $1 AND organization_id = $2 AND is_active = true",
+        key_id,
+        org_id
+    )
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error(format!("Database error: {}", e))),
+        )
+    })?
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("API key not found".to_string())),
+        )
+    })?;
+
+    let api_key_response = ApiKeyResponse {
+        id: api_key.id,
+        name: api_key.name,
+        key_prefix: api_key.key_prefix,
+        organization_id: api_key.organization_id,
+        scopes: api_key.scopes,
+        last_used_at: api_key.last_used_at,
+        is_active: api_key.is_active,
+        expires_at: api_key.expires_at,
+        created_at: api_key.created_at,
+    };
+
+    Ok(Json(ApiResponse::success(api_key_response)))
+}
+
+pub async fn revoke_api_key(
+    State(state): State<Arc<AppState>>,
+    Extension(current_user): Extension<CurrentUser>,
+    Path((org_id, key_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ApiResponse<()>>, (StatusCode, Json<ApiResponse<()>>)> {
+    // Check if user has access to the organization
+    let org_membership = sqlx::query!(
+        r#"
+        SELECT role FROM organization_memberships 
+        WHERE organization_id = $1 AND user_id = $2 AND is_active = true
+        "#,
+        org_id,
+        current_user.id
+    )
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error(format!("Database error: {}", e))),
+        )
+    })?
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("Organization not found or access denied".to_string())),
+        )
+    })?;
+
+    // Get API key to check ownership
+    let api_key = sqlx::query!(
+        "SELECT user_id FROM api_keys WHERE id = $1 AND organization_id = $2 AND is_active = true",
+        key_id,
+        org_id
+    )
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error(format!("Database error: {}", e))),
+        )
+    })?
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("API key not found".to_string())),
+        )
+    })?;
+
+    // Only key owner or org admin/owner can revoke
+    if api_key.user_id != current_user.id && !["admin", "owner"].contains(&org_membership.role.as_str()) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::error("Insufficient permissions to revoke this API key".to_string())),
+        ));
+    }
+
+    let now = Utc::now();
+
+    // Revoke API key (soft delete)
+    sqlx::query!(
+        "UPDATE api_keys SET is_active = false, updated_at = $1 WHERE id = $2",
+        now,
+        key_id
+    )
+    .execute(&state.db_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error(format!("Failed to revoke API key: {}", e))),
+        )
+    })?;
+
+    Ok(Json(ApiResponse {
+        success: true,
+        data: None,
+        message: Some("API key revoked successfully".to_string()),
+        timestamp: Utc::now(),
+    }))
+}
