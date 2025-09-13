@@ -6,6 +6,26 @@
 
 A cloud-native solution for providing Redis-as-a-Service on Kubernetes, accessible via a secure, high-performance, shared RESTful API. Designed for modern serverless and edge environments where direct TCP connections are restricted.
 
+## 🚀 Quick Start
+
+### Development Setup
+
+```bash
+# One-time setup (installs all dependencies)
+./setup-dev.sh
+
+# Start development services
+make dev
+
+# Start Minikube and deploy
+make deploy
+
+# Full development setup
+make dev-full
+```
+
+For detailed development setup instructions, see [DEVELOPMENT.md](DEVELOPMENT.md).
+
 ## 🎯 Problem Statement
 
 Modern serverless and edge computing platforms (e.g., Cloudflare Workers, Vercel Edge Functions) often prohibit direct TCP socket connections. This creates a significant barrier for applications needing to leverage high-performance in-memory data stores like Redis for caching, session management, or real-time data processing. **KubeRedis HTTP Gateway** bridges this gap.
