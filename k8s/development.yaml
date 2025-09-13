@@ -23,11 +23,6 @@ data:
   POSTGRES_PORT: "5432"
   POSTGRES_DB: "redisgate_dev"
   
-  # Redis configuration (using external service)
-  REDIS_HOST: "host.minikube.internal"
-  REDIS_PORT: "6379"
-  REDIS_DB: "0"
-  
   # Kubernetes configuration
   K8S_NAMESPACE: "redisgate-dev"
   K8S_DOMAIN: "redisgate.local"
@@ -42,9 +37,6 @@ stringData:
   # Database credentials
   POSTGRES_USER: "redisgate_dev"
   POSTGRES_PASSWORD: "redisgate_dev_password"
-  
-  # Redis credentials
-  REDIS_PASSWORD: "redisgate_redis_password"
   
   # JWT secret
   JWT_SECRET: "development_jwt_secret_key_change_in_production"

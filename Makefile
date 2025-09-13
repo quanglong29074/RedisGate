@@ -80,10 +80,6 @@ db-reset: ## Reset PostgreSQL database
 	@echo "$(YELLOW)Resetting PostgreSQL database...$(NC)"
 	./scripts/dev-services.sh reset-db
 
-redis-connect: ## Connect to Redis
-	@echo "$(BLUE)Connecting to Redis...$(NC)"
-	./scripts/dev-services.sh redis-cli
-
 # Minikube operations
 k8s-start: ## Start Minikube cluster
 	@echo "$(BLUE)Starting Minikube cluster...$(NC)"
@@ -202,8 +198,6 @@ dev-full: setup dev k8s-start deploy ## Complete development setup and deploymen
 	@echo ""
 	@echo "$(YELLOW)Services:$(NC)"
 	@echo "  PostgreSQL: localhost:$(POSTGRES_PORT)"
-	@echo "  Redis: localhost:$(REDIS_PORT)"
-	@echo "  Redis Insight: http://localhost:8001"
 	@echo ""
 	@echo "$(YELLOW)Kubernetes:$(NC)"
 	@echo "  Dashboard: minikube dashboard"

@@ -17,8 +17,7 @@ chrono = { version = "0.4", features = ["serde"] }
 sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "postgres", "uuid", "chrono", "migrate"] }
 rust_decimal = { version = "1.0", features = ["serde-with-str"] }
 
-# Redis
-redis = { version = "0.23", features = ["tokio-comp"] }
+
 
 # Web framework
 axum = "0.7"
