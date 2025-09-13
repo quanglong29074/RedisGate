@@ -1,4 +1,4 @@
-# KubeRedis HTTP Gateway
+# RedisGate
 
 [](https://www.google.com/search?q=https://github.com/your-repo/your-project/actions)
 [](https://opensource.org/licenses/MIT)
