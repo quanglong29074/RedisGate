@@ -15,6 +15,9 @@ use tracing::{info, warn};
 mod api_models;
 mod auth;
 mod handlers;
+pub mod k8s_service;
+#[cfg(test)]
+mod k8s_tests;
 mod middleware;
 mod models;
 
@@ -71,6 +74,7 @@ async fn main() {
                 .route("/organizations/:org_id/redis-instances", post(handlers::redis_instances::create_redis_instance))
                 .route("/organizations/:org_id/redis-instances", get(handlers::redis_instances::list_redis_instances))
                 .route("/organizations/:org_id/redis-instances/:instance_id", get(handlers::redis_instances::get_redis_instance))
+                .route("/organizations/:org_id/redis-instances/:instance_id/status", put(handlers::redis_instances::update_redis_instance_status))
                 .route("/organizations/:org_id/redis-instances/:instance_id", delete(handlers::redis_instances::delete_redis_instance))
                 
                 // Apply authentication middleware only to protected routes
