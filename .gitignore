@@ -79,3 +79,7 @@ coverage/
 
 # Local configuration overrides
 config.local.*
+
+# Added by cargo
+
+/target
