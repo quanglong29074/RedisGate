@@ -1,0 +1,91 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.coverage.*
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+test_report.txt
+
+# Temporary files
+.tmp/
+temp/
+tmp/
+*.tmp
+*.temp
+
+# Test data
+test_data/
+test_storage/
+test_redis_data/
+
+# Docker
+.docker/
+
+# Local configuration
+local_config.toml
+.env.local
+test.env
+
+# Server binaries and builds
+target/
+*.exe
+redisgate
+redisgate.exe
+
+# Redis dump files
+*.rdb
+*.aof
+
+# Test certificates
+*.pem
+*.crt
+*.key
