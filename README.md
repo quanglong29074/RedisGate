@@ -41,6 +41,41 @@ Modern serverless and edge computing platforms (e.g., Cloudflare Workers, Vercel
   * **Secure by Design:** Each instance is isolated and protected by a unique, auto-generated API key.
   * **Cloud-Native:** Built from the ground up to leverage the power and scalability of Kubernetes.
 
+## 🎛️ Kubernetes Integration
+
+RedisGate seamlessly integrates with Kubernetes to provide true Redis-as-a-Service functionality:
+
+### Automatic Redis Deployment
+- **Full K8s Resources**: Creates Deployment, Service, and Ingress resources automatically
+- **Resource Management**: Configurable memory limits, CPU requests, and Redis versions
+- **Secret Management**: Automatically generates and manages Redis passwords using K8s Secrets
+- **Namespace Isolation**: Organizes instances by organization for better resource management
+
+### API-Driven Management
+```bash
+# Create a Redis instance (deploys to K8s automatically)
+POST /api/organizations/{org_id}/redis-instances
+{
+  "name": "my-redis",
+  "slug": "my-redis",
+  "organization_id": "uuid",
+  "max_memory": 104857600,
+  "redis_version": "7.2"
+}
+
+# Monitor deployment status
+PUT /api/organizations/{org_id}/redis-instances/{instance_id}/status
+
+# Delete instance (cleans up all K8s resources)
+DELETE /api/organizations/{org_id}/redis-instances/{instance_id}
+```
+
+### Production Features
+- **Health Monitoring**: Real-time deployment status tracking
+- **Resource Cleanup**: Automatic cleanup of all K8s resources on deletion
+- **Rollback Support**: Database rollback if K8s deployment fails
+- **Status Synchronization**: Keeps database status in sync with K8s deployment state
+
 ## 🏗️ System Architecture
 
 The system consists of two primary components: a **Control Plane** (the Operator) and a **Data Plane** (the shared Gateway).
