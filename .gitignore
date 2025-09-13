@@ -40,6 +40,12 @@ logs/
 *.db
 *.sqlite
 
+# Database migration approach - using SQLx migrations instead of init-db.sql
+scripts/init-db.sql
+
+# SQLx offline mode (keep these files for CI/CD)
+!.sqlx/
+
 # Temporary files
 /tmp/
 temp/
