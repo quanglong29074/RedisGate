@@ -1,0 +1,81 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Development Environment
+.env
+.env.local
+.env.production
+.env.test
+
+# Keep env.development for development setup
+!env.development
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+
+# Temporary files
+/tmp/
+temp/
+*.tmp
+
+# Node modules (if any JS tools are added)
+node_modules/
+
+# Python (if any Python tools are added)
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+.venv/
+
+# Kubernetes
+*.kubeconfig
+
+# Minikube
+.minikube/
+
+# Build artifacts
+dist/
+build/
+*.tar.gz
+*.zip
+
+# Editor directories and files
+.nova
+.nyc_output
+
+# Coverage
+coverage/
+*.lcov
+
+# Local configuration overrides
+config.local.*

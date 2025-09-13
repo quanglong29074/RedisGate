@@ -1,0 +1,54 @@
+-- RedisGate Development Database Initialization
+-- This script sets up the initial database schema for development
+
+-- Create database user if not exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'redisgate_dev') THEN
+        CREATE ROLE redisgate_dev WITH LOGIN PASSWORD 'redisgate_dev_password';
+    END IF;
+END
+$$;
+
+-- Grant necessary permissions
+GRANT ALL PRIVILEGES ON DATABASE redisgate_dev TO redisgate_dev;
+GRANT ALL PRIVILEGES ON SCHEMA public TO redisgate_dev;
+
+-- Create extensions if needed
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Example table structure (can be updated based on actual requirements)
+-- This is a placeholder schema for development
+
+CREATE TABLE IF NOT EXISTS api_keys (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    key_hash VARCHAR(255) NOT NULL UNIQUE,
+    user_id VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    expires_at TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS redis_instances (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    namespace VARCHAR(255) NOT NULL,
+    domain VARCHAR(255) NOT NULL UNIQUE,
+    api_key_id UUID REFERENCES api_keys(id) ON DELETE CASCADE,
+    status VARCHAR(50) DEFAULT 'pending',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(is_active);
+CREATE INDEX IF NOT EXISTS idx_redis_instances_domain ON redis_instances(domain);
+CREATE INDEX IF NOT EXISTS idx_redis_instances_status ON redis_instances(status);
+
+-- Grant permissions on tables
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO redisgate_dev;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO redisgate_dev;
