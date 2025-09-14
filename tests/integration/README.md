@@ -24,6 +24,7 @@ tests/integration/
 ├── run_tests.py           # Main test runner script
 ├── test_basic_redis_operations.py    # Basic Redis operations tests
 ├── test_advanced_redis_operations.py # Advanced Redis operations tests
+├── test_complete_chain_integration.py # Complete chain integration tests
 └── README.md              # This file
 ```
 
@@ -191,6 +192,15 @@ Options:
 **TestRedisBenchmarkOperations**
 - `test_rapid_set_get_operations()` - Performance testing
 - `test_large_batch_operations()` - Large-scale operations
+
+### Complete Chain Integration Tests (`test_complete_chain_integration.py`)
+
+**TestCompleteChainIntegration**
+- `test_complete_end_to_end_chain()` - Complete workflow: register → organization → Redis instance → API key → Redis operations
+- `test_chain_integration_multiple_resources()` - Multi-organization and multi-instance testing
+- `test_chain_integration_performance()` - Performance testing of the complete chain workflow
+
+These tests validate the entire user journey from account creation to Redis operations, providing comprehensive end-to-end testing of the RedisGate platform.
 
 ## Configuration
 
