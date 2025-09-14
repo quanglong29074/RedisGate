@@ -83,6 +83,15 @@ async fn main() {
                     middleware::auth_middleware,
                 ))
         )
+        
+        // Redis HTTP API routes (uses API key authentication)
+        .route("/redis/:instance_id/ping", get(handlers::redis::handle_ping))
+        .route("/redis/:instance_id/set/:key/:value", get(handlers::redis::handle_set))
+        .route("/redis/:instance_id/get/:key", get(handlers::redis::handle_get))
+        .route("/redis/:instance_id/del/:key", get(handlers::redis::handle_del))
+        
+        // Generic Redis command endpoint (for POST with JSON body)
+        .route("/redis/:instance_id", post(handlers::redis::handle_generic_command))
         .layer(CorsLayer::permissive())
         .with_state(app_state)
         .layer(Extension(Arc::new(pool)));
