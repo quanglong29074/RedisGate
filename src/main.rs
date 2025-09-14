@@ -26,8 +26,12 @@ async fn main() {
     // Initialize tracing
     tracing_subscriber::fmt::init();
 
-    // Load environment variables
-    dotenv::dotenv().ok();
+    // Load environment variables - prioritize .env.development for development
+    if std::path::Path::new(".env.development").exists() {
+        dotenv::from_filename(".env.development").ok();
+    } else {
+        dotenv::dotenv().ok();
+    }
 
     // Database connection
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
