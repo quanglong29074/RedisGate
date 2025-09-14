@@ -36,6 +36,10 @@ jobs:
           path: target/
           key: ${{ runner.os }}-cargo-build-check-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Set up environment
+        run: |
+          echo "SQLX_OFFLINE=true" >> $GITHUB_ENV
+
       - name: Check code
         run: cargo check --all-targets --all-features
 

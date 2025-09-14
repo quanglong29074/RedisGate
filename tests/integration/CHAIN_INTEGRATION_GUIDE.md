@@ -67,21 +67,20 @@ python run_tests.py --mode basic --verbose
 ✅ Step 1: User registration - SUCCESS
 ✅ Step 2: User authentication - SUCCESS  
 ✅ Step 3: Organization creation - SUCCESS
-⚠️  Step 4: Redis instance creation - FAILED (K8s required)
-    Error: Server error '500 Internal Server Error' 
+✅ Step 4: Redis instance creation - SUCCESS
 ✅ Step 5: API key creation - SUCCESS
-⚠️  Step 6: Redis operations - SKIPPED/FAILED
+✅ Step 6: Redis operations (SET/GET/DELETE) - SUCCESS
 
 📊 CHAIN TEST RESULTS:
    Management API Flow: ✅ COMPLETE
-   Redis Operations: ⚠️  REQUIRES K8S
+   Redis Operations: ✅ WORKING
 ```
 
-This is **expected behavior** in environments without Kubernetes. The management API is fully validated.
+**Note**: Redis operations now work even without Kubernetes by connecting to the local Redis instance provided by `./scripts/dev-services.sh start`. The server creates database records for Redis instances (status: "simulation") and the Redis HTTP API connects to the local Redis service.
 
 ### Expected Behavior (With Kubernetes)
 
-In a complete environment with Kubernetes:
+In a complete environment with Kubernetes, the main difference is that Redis instances are actually deployed to the Kubernetes cluster with status "pending" or "running", rather than status "simulation". The test behavior and results are the same:
 
 ```
 🏁 CHAIN INTEGRATION TEST SUMMARY for [test-id]

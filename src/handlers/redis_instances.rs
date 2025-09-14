@@ -22,15 +22,6 @@ use crate::models::RedisInstance;
 
 type ErrorResponse = (StatusCode, Json<ApiResponse<()>>);
 
-// Mock K8s result for development/testing
-struct MockK8sResult {
-    port: i32,
-    domain: String,
-    namespace: String,
-    deployment_name: String,
-    service_name: String,
-}
-
 // Helper function to convert RedisInstance to RedisInstanceResponse
 fn redis_instance_to_response(redis_instance: RedisInstance) -> RedisInstanceResponse {
     RedisInstanceResponse {
@@ -196,14 +187,59 @@ pub async fn create_redis_instance(
     let port = 6379;
     let domain = format!("{}.{}.redis.local", payload.slug, payload.organization_id.simple());
 
-    // For development/testing, simulate K8s deployment without actually deploying
-    let mock_k8s_result = MockK8sResult {
-        port,
-        domain: domain.clone(),
-        namespace: namespace.clone(),
-        deployment_name: format!("redis-{}", payload.slug),
-        service_name: format!("redis-{}-service", payload.slug),
+    // Try to deploy to Kubernetes if available
+    let k8s_deployment_result = match crate::k8s_service::K8sRedisService::new().await {
+        Ok(k8s_service) => {
+            let config = crate::k8s_service::RedisDeploymentConfig {
+                name: payload.name.clone(),
+                slug: payload.slug.clone(),
+                namespace: namespace.clone(),
+                organization_id: payload.organization_id,
+                instance_id,
+                redis_version: redis_version.clone(),
+                max_memory: payload.max_memory,
+                redis_password: redis_password.clone(),
+                port,
+            };
+            
+            match k8s_service.create_redis_instance(config).await {
+                Ok(result) => {
+                    tracing::info!("Successfully deployed Redis instance to Kubernetes: {}", instance_id);
+                    Some(result)
+                },
+                Err(e) => {
+                    tracing::warn!("Failed to deploy Redis instance to Kubernetes: {}. Continuing with database-only creation.", e);
+                    None
+                }
+            }
+        },
+        Err(e) => {
+            tracing::warn!("Kubernetes not available: {}. Creating Redis instance without K8s deployment.", e);
+            None
+        }
     };
+
+    // Use deployment result or mock data for database record
+    let (actual_port, actual_domain, actual_namespace, deployment_name, service_name, status) = 
+        if let Some(ref result) = k8s_deployment_result {
+            (
+                result.port,
+                result.domain.clone(),
+                result.namespace.clone(),
+                result.deployment_name.clone(),
+                result.service_name.clone(),
+                "pending" // K8s deployment is pending
+            )
+        } else {
+            (
+                port,
+                domain.clone(),
+                namespace.clone(),
+                format!("redis-{}", payload.slug),
+                format!("redis-{}-service", payload.slug),
+                "simulation" // Not actually deployed to K8s
+            )
+        };
 
     sqlx::query(
         r#"
@@ -221,16 +257,16 @@ pub async fn create_redis_instance(
     .bind(&payload.name)
     .bind(&payload.slug)
     .bind(payload.organization_id)
-    .bind(mock_k8s_result.port)
-    .bind(&mock_k8s_result.domain)
+    .bind(actual_port)
+    .bind(&actual_domain)
     .bind(payload.max_memory)
     .bind(0i64) // current_memory starts at 0
     .bind(&redis_password_hash)
     .bind(&redis_version)
-    .bind(&mock_k8s_result.namespace)
-    .bind(&mock_k8s_result.deployment_name) // pod_name (using deployment name)
-    .bind(&mock_k8s_result.service_name)
-    .bind("creating") // status
+    .bind(&actual_namespace)
+    .bind(&deployment_name) // pod_name (using deployment name)
+    .bind(&service_name)
+    .bind(status) // status reflects K8s deployment state
     .bind("unknown") // health_status
     .bind(BigDecimal::new(0.into(), 2)) // cpu_usage_percent
     .bind(BigDecimal::new(0.into(), 2)) // memory_usage_percent
@@ -243,8 +279,14 @@ pub async fn create_redis_instance(
     .execute(&state.db_pool)
     .await
     .map_err(|e| {
-        // If database insert fails, we would clean up K8s resources in production
-        // For development/testing, no cleanup needed
+        // If database insert fails, we should clean up K8s resources if they were created
+        if let Some(result) = k8s_deployment_result {
+            tokio::spawn(async move {
+                if let Ok(k8s_service) = crate::k8s_service::K8sRedisService::new().await {
+                    let _ = k8s_service.delete_redis_instance(&result.namespace, &payload.slug).await;
+                }
+            });
+        }
         
         (
             StatusCode::INTERNAL_SERVER_ERROR,

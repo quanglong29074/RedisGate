@@ -3,7 +3,7 @@ Pytest configuration and fixtures for RedisGate integration tests.
 
 This module provides:
 - RedisGate server process management
-- Upstash Redis client setup
+- RedisGate Redis client setup  
 - Test data generation and cleanup
 - Authentication helpers
 - Database setup and teardown
@@ -25,7 +25,6 @@ import pytest
 import pytest_asyncio
 from rich.console import Console
 from rich.panel import Panel
-from upstash_redis import Redis
 import psutil
 
 # Configure rich console for better test output
@@ -286,37 +285,79 @@ class RedisGateClient:
         self.client.close()
 
 class UpstashRedisClient:
-    """Upstash Redis client for testing Redis operations."""
+    """RedisGate Redis client for testing Redis operations via HTTP API."""
     
     def __init__(self, redis_instance_url: str, api_key: str):
         self.redis_instance_url = redis_instance_url.rstrip('/')
         self.api_key = api_key
+        self.client = httpx.AsyncClient(timeout=CLIENT_TIMEOUT)
         
-        # Initialize upstash-redis client
-        self.redis = Redis(
-            url=redis_instance_url,
-            token=api_key
-        )
+        # Extract instance ID from URL if it's a full URL
+        if 'redis/' in redis_instance_url:
+            self.instance_id = redis_instance_url.split('redis/')[-1]
+            self.base_url = redis_instance_url.split('/redis/')[0]
+        else:
+            # Assume it's just the instance ID
+            self.instance_id = redis_instance_url
+            self.base_url = "http://localhost:8080"
+    
+    def _get_headers(self) -> Dict[str, str]:
+        """Get headers with API key authentication."""
+        return {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
+    
+    def _get_params(self) -> Dict[str, str]:
+        """Get query parameters with API key authentication."""
+        return {"_token": self.api_key}
     
     async def set(self, key: str, value: str) -> Any:
         """Set a key-value pair."""
-        return await self.redis.set(key, value)
+        url = f"{self.base_url}/redis/{self.instance_id}/set/{key}/{value}"
+        response = await self.client.get(url, params=self._get_params())
+        response.raise_for_status()
+        result = response.json()
+        # The server returns {"result": "OK"} for successful SET
+        return result.get("result", "OK")
     
     async def get(self, key: str) -> Any:
         """Get a value by key."""
-        return await self.redis.get(key)
+        url = f"{self.base_url}/redis/{self.instance_id}/get/{key}"
+        response = await self.client.get(url, params=self._get_params())
+        response.raise_for_status()
+        result = response.json()
+        # The server returns {"result": value} or {"result": null} for not found
+        return result.get("result")
     
     async def delete(self, key: str) -> Any:
         """Delete a key."""
-        return await self.redis.delete(key)
+        url = f"{self.base_url}/redis/{self.instance_id}/del/{key}"
+        response = await self.client.get(url, params=self._get_params())
+        response.raise_for_status()
+        result = response.json()
+        # The server returns {"result": number_of_keys_deleted}
+        return result.get("result", 0)
     
     async def ping(self) -> Any:
         """Ping the Redis instance."""
-        return await self.redis.ping()
+        url = f"{self.base_url}/redis/{self.instance_id}/ping"
+        response = await self.client.get(url, params=self._get_params())
+        response.raise_for_status()
+        result = response.json()
+        # The server returns {"result": "PONG"} for successful ping
+        return result.get("result", "PONG")
     
     async def flushall(self) -> Any:
         """Flush all keys from the database."""
-        return await self.redis.flushall()
+        # This would need to be implemented as a generic command
+        url = f"{self.base_url}/redis/{self.instance_id}"
+        payload = {"command": ["FLUSHALL"]}
+        response = await self.client.post(url, json=payload, params=self._get_params())
+        response.raise_for_status()
+        result = response.json()
+        # The server returns {"result": "OK"} for successful FLUSHALL
+        return result.get("result", "OK")
 
 # Fixtures
 
@@ -394,7 +435,7 @@ async def redis_setup(authenticated_client: RedisGateClient) -> AsyncGenerator[D
 
 @pytest.fixture
 async def upstash_redis(redis_setup: Dict[str, Any]) -> AsyncGenerator[UpstashRedisClient, None]:
-    """Provide an Upstash Redis client for testing."""
+    """Provide a RedisGate Redis client for testing."""
     redis_client = UpstashRedisClient(
         redis_setup["redis_url"],
         redis_setup["token"]
