@@ -59,9 +59,10 @@ async fn authenticate_and_get_instance(
 ) -> Result<RedisInstance, ErrorResponse> {
     // Get API key from database
     let api_key_record = sqlx::query!(
-        "SELECT id, organization_id, is_active, key_hash FROM api_keys WHERE is_active = true"
+        "SELECT id, organization_id, is_active FROM api_keys WHERE key_hash = $1",
+        crate::auth::hash_password(api_key).unwrap()
     )
-    .fetch_all(&state.db_pool)
+    .fetch_optional(&state.db_pool)
     .await
     .map_err(|e| {
         error!("Database error checking API key: {}", e);
@@ -71,19 +72,13 @@ async fn authenticate_and_get_instance(
         )
     })?;
 
-    // Find matching API key by verifying the hash
-    let api_key_record = api_key_record
-        .into_iter()
-        .find(|record| {
-            crate::auth::verify_password(api_key, &record.key_hash).unwrap_or(false)
-        })
-        .ok_or_else(|| {
-            warn!("Invalid API key provided");
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({"error": "Invalid API key"})),
-            )
-        })?;
+    let api_key_record = api_key_record.ok_or_else(|| {
+        warn!("Invalid API key provided");
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"error": "Invalid API key"})),
+        )
+    })?;
 
     if !api_key_record.is_active.unwrap_or(false) {
         warn!("Inactive API key used");
