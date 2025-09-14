@@ -318,8 +318,8 @@ class UpstashRedisClient:
         response = await self.client.get(url, params=self._get_params())
         response.raise_for_status()
         result = response.json()
-        # Return the result field or "OK" for success
-        return result.get("result", "OK") if result.get("success") else result
+        # The server returns {"result": "OK"} for successful SET
+        return result.get("result", "OK")
     
     async def get(self, key: str) -> Any:
         """Get a value by key."""
@@ -327,8 +327,8 @@ class UpstashRedisClient:
         response = await self.client.get(url, params=self._get_params())
         response.raise_for_status()
         result = response.json()
-        # Return the result field or None for key not found
-        return result.get("result") if result.get("success") else None
+        # The server returns {"result": value} or {"result": null} for not found
+        return result.get("result")
     
     async def delete(self, key: str) -> Any:
         """Delete a key."""
@@ -336,8 +336,8 @@ class UpstashRedisClient:
         response = await self.client.get(url, params=self._get_params())
         response.raise_for_status()
         result = response.json()
-        # Return the number of keys deleted
-        return result.get("result", 0) if result.get("success") else 0
+        # The server returns {"result": number_of_keys_deleted}
+        return result.get("result", 0)
     
     async def ping(self) -> Any:
         """Ping the Redis instance."""
@@ -345,8 +345,8 @@ class UpstashRedisClient:
         response = await self.client.get(url, params=self._get_params())
         response.raise_for_status()
         result = response.json()
-        # Return PONG for successful ping
-        return result.get("result", "PONG") if result.get("success") else result
+        # The server returns {"result": "PONG"} for successful ping
+        return result.get("result", "PONG")
     
     async def flushall(self) -> Any:
         """Flush all keys from the database."""
@@ -356,7 +356,8 @@ class UpstashRedisClient:
         response = await self.client.post(url, json=payload, params=self._get_params())
         response.raise_for_status()
         result = response.json()
-        return result.get("result", "OK") if result.get("success") else result
+        # The server returns {"result": "OK"} for successful FLUSHALL
+        return result.get("result", "OK")
 
 # Fixtures
 
