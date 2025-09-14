@@ -16,7 +16,7 @@ use crate::api_models::{
     RedisInstanceResponse,
 };
 use crate::auth::hash_password;
-use crate::k8s_service::{K8sRedisService, RedisDeploymentConfig};
+use crate::k8s_service::K8sRedisService;
 use crate::middleware::{AppState, CurrentUser};
 use crate::models::RedisInstance;
 
@@ -91,7 +91,7 @@ pub async fn create_redis_instance(
     }
 
     // Check if user has access to the organization
-    let org_membership = sqlx::query!(
+    let _org_membership = sqlx::query!(
         r#"
         SELECT role FROM organization_memberships 
         WHERE organization_id = $1 AND user_id = $2 AND is_active = true
@@ -173,7 +173,7 @@ pub async fn create_redis_instance(
     }
 
     // Create Redis instance without automatic API key creation
-    let instance_id = Uuid::new_v4();
+    let _instance_id = Uuid::new_v4();
     let now = Utc::now();
     
     // Generate Redis password and hash it

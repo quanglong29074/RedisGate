@@ -66,7 +66,7 @@ pub async fn create_api_key(
     }
 
     // Check if user has access to the organization
-    let org_membership = sqlx::query!(
+    let _org_membership = sqlx::query!(
         r#"
         SELECT role FROM organization_memberships 
         WHERE organization_id = $1 AND user_id = $2 AND is_active = true

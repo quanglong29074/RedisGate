@@ -89,6 +89,11 @@ async fn main() {
         .route("/redis/:instance_id/set/:key/:value", get(handlers::redis::handle_set))
         .route("/redis/:instance_id/get/:key", get(handlers::redis::handle_get))
         .route("/redis/:instance_id/del/:key", get(handlers::redis::handle_del))
+        .route("/redis/:instance_id/incr/:key", get(handlers::redis::handle_incr))
+        .route("/redis/:instance_id/hset/:key/:field/:value", get(handlers::redis::handle_hset))
+        .route("/redis/:instance_id/hget/:key/:field", get(handlers::redis::handle_hget))
+        .route("/redis/:instance_id/lpush/:key/:value", get(handlers::redis::handle_lpush))
+        .route("/redis/:instance_id/lpop/:key", get(handlers::redis::handle_lpop))
         
         // Generic Redis command endpoint (for POST with JSON body)
         .route("/redis/:instance_id", post(handlers::redis::handle_generic_command))
