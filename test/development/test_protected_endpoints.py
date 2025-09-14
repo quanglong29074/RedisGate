@@ -21,6 +21,7 @@ class TestOrganizations:
         """Test creating an organization."""
         org_data = {
             "name": f"Test Organization {generate_test_key()}",
+            "slug": f"test-org-{generate_test_key()}",
             "description": "Test organization for development testing"
         }
         
@@ -30,13 +31,15 @@ class TestOrganizations:
             headers=auth_user["auth_headers"]
         )
         
-        assert response.status_code == 201
+        assert response.status_code == 200
         data = response.json()
-        assert data["name"] == org_data["name"]
-        assert data["description"] == org_data["description"]
-        assert "id" in data
-        assert "owner_id" in data
-        assert data["owner_id"] == auth_user["user_id"]
+        assert data["success"] == True
+        assert data["data"]["name"] == org_data["name"]
+        assert data["data"]["description"] == org_data["description"]
+        assert data["data"]["slug"] == org_data["slug"]
+        assert "id" in data["data"]
+        assert "owner_id" in data["data"]
+        assert data["data"]["owner_id"] == auth_user["user_id"]
     
     @pytest.mark.protected
     async def test_list_organizations(self, api_client: ApiClient, auth_user: Dict[str, Any], test_organization: Dict[str, Any], wait_for_server):
@@ -48,11 +51,12 @@ class TestOrganizations:
         
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
-        assert len(data) >= 1
+        assert data["success"] == True
+        assert isinstance(data["data"], list)
+        assert len(data["data"]) >= 1
         
         # Check if our test organization is in the list
-        org_ids = [org["id"] for org in data]
+        org_ids = [org["id"] for org in data["data"]]
         assert test_organization["id"] in org_ids
     
     @pytest.mark.protected
@@ -67,9 +71,10 @@ class TestOrganizations:
         
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == org_id
-        assert data["name"] == test_organization["name"]
-        assert data["description"] == test_organization["description"]
+        assert data["success"] == True
+        assert data["data"]["id"] == org_id
+        assert data["data"]["name"] == test_organization["name"]
+        assert data["data"]["description"] == test_organization["description"]
     
     @pytest.mark.protected
     async def test_update_organization(self, api_client: ApiClient, auth_user: Dict[str, Any], test_organization: Dict[str, Any], wait_for_server):
@@ -78,6 +83,7 @@ class TestOrganizations:
         
         update_data = {
             "name": f"Updated Organization {generate_test_key()}",
+            "slug": f"updated-org-{generate_test_key()}",
             "description": "Updated description"
         }
         
@@ -89,8 +95,9 @@ class TestOrganizations:
         
         assert response.status_code == 200
         data = response.json()
-        assert data["name"] == update_data["name"]
-        assert data["description"] == update_data["description"]
+        assert data["success"] == True
+        assert data["data"]["name"] == update_data["name"]
+        assert data["data"]["description"] == update_data["description"]
     
     @pytest.mark.protected
     async def test_delete_organization(self, api_client: ApiClient, auth_user: Dict[str, Any], wait_for_server):
@@ -98,6 +105,7 @@ class TestOrganizations:
         # Create a temporary organization for deletion
         org_data = {
             "name": f"Temp Organization {generate_test_key()}",
+            "slug": f"temp-org-{generate_test_key()}",
             "description": "Temporary organization for deletion test"
         }
         
@@ -106,8 +114,8 @@ class TestOrganizations:
             json=org_data,
             headers=auth_user["auth_headers"]
         )
-        assert create_response.status_code == 201
-        temp_org = create_response.json()
+        assert create_response.status_code == 200
+        temp_org = create_response.json()["data"]
         
         # Delete the organization
         delete_response = await api_client.delete(

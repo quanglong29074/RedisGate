@@ -109,7 +109,7 @@ async def auth_user(api_client: ApiClient):
     }
     
     register_response = await api_client.post("/auth/register", json=register_data)
-    assert register_response.status_code == 201, f"Registration failed: {register_response.text}"
+    assert register_response.status_code == 200, f"Registration failed: {register_response.text}"
     
     # Login to get JWT token
     login_data = {
@@ -123,11 +123,11 @@ async def auth_user(api_client: ApiClient):
     login_result = login_response.json()
     
     return {
-        "user_id": login_result["user"]["id"],
+        "user_id": login_result["data"]["user"]["id"],
         "username": username,
         "email": email,
-        "jwt_token": login_result["token"],
-        "auth_headers": {"Authorization": f"Bearer {login_result['token']}"}
+        "jwt_token": login_result["data"]["token"],
+        "auth_headers": {"Authorization": f"Bearer {login_result['data']['token']}"}
     }
 
 
@@ -136,6 +136,7 @@ async def test_organization(api_client: ApiClient, auth_user: Dict[str, Any]):
     """Create a test organization and return its data."""
     org_data = {
         "name": f"Test Organization {uuid4().hex[:8]}",
+        "slug": f"test-org-{uuid4().hex[:8]}",
         "description": "Test organization for development testing"
     }
     
@@ -144,9 +145,9 @@ async def test_organization(api_client: ApiClient, auth_user: Dict[str, Any]):
         json=org_data,
         headers=auth_user["auth_headers"]
     )
-    assert response.status_code == 201, f"Organization creation failed: {response.text}"
+    assert response.status_code == 200, f"Organization creation failed: {response.text}"
     
-    return response.json()
+    return response.json()["data"]
 
 
 @pytest_asyncio.fixture
@@ -165,9 +166,9 @@ async def test_api_key(api_client: ApiClient, auth_user: Dict[str, Any], test_or
         json=api_key_data,
         headers=auth_user["auth_headers"]
     )
-    assert response.status_code == 201, f"API key creation failed: {response.text}"
+    assert response.status_code == 200, f"API key creation failed: {response.text}"
     
-    return response.json()
+    return response.json()["data"]
 
 
 @pytest_asyncio.fixture
@@ -188,9 +189,9 @@ async def test_redis_instance(api_client: ApiClient, auth_user: Dict[str, Any], 
         json=instance_data,
         headers=auth_user["auth_headers"]
     )
-    assert response.status_code == 201, f"Redis instance creation failed: {response.text}"
+    assert response.status_code == 200, f"Redis instance creation failed: {response.text}"
     
-    return response.json()
+    return response.json()["data"]
 
 
 def generate_test_key(prefix: str = "test") -> str:

@@ -21,9 +21,9 @@ class TestPublicEndpoints:
         
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "healthy"
+        assert data["status"] == "ok"
         assert "timestamp" in data
-        assert "uptime" in data
+        assert data["database"] == "healthy"
     
     @pytest.mark.public
     async def test_version(self, api_client: ApiClient, wait_for_server):
@@ -33,8 +33,9 @@ class TestPublicEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert "version" in data
-        assert "build_time" in data
-        assert "git_commit" in data
+        assert "name" in data
+        assert "description" in data
+        assert data["name"] == "redisgate"
     
     @pytest.mark.public
     async def test_database_stats(self, api_client: ApiClient, wait_for_server):
@@ -43,8 +44,8 @@ class TestPublicEndpoints:
         
         assert response.status_code == 200
         data = response.json()
-        assert "database" in data
-        assert "connections" in data
-        assert isinstance(data["connections"], dict)
-        assert "pool_size" in data["connections"]
-        assert "active_connections" in data["connections"]
+        assert "tables" in data
+        assert "timestamp" in data
+        assert isinstance(data["tables"], dict)
+        assert "users" in data["tables"]
+        assert "organizations" in data["tables"]
