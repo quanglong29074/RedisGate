@@ -136,7 +136,7 @@ async def test_organization(api_client: ApiClient, auth_user: Dict[str, Any]):
     """Create a test organization and return its data."""
     org_data = {
         "name": f"Test Organization {uuid4().hex[:8]}",
-        "slug": f"test-org-{uuid4().hex[:8]}",
+        "slug": f"test-org-{int(time.time() * 1000000)}",  # Use microsecond timestamp for uniqueness
         "description": "Test organization for development testing"
     }
     
@@ -157,6 +157,7 @@ async def test_api_key(api_client: ApiClient, auth_user: Dict[str, Any], test_or
     
     api_key_data = {
         "name": f"Test API Key {uuid4().hex[:8]}",
+        "organization_id": org_id,
         "permissions": ["read", "write"],
         "expires_at": None  # No expiration for testing
     }
