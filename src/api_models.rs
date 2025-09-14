@@ -136,7 +136,7 @@ pub struct RedisInstanceResponse {
     pub name: String,
     pub slug: String,
     pub organization_id: Uuid,
-    pub api_key_id: Uuid,
+    pub api_key_id: Option<Uuid>,
     pub port: i32,
     pub domain: Option<String>,
     pub max_memory: i64,

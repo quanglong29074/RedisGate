@@ -63,7 +63,7 @@ pub struct RedisInstance {
     pub name: String,
     pub slug: String,
     pub organization_id: Uuid,
-    pub api_key_id: Uuid,
+    pub api_key_id: Option<Uuid>,
 
     // Network configuration
     pub port: Option<i32>,
