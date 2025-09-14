@@ -2,7 +2,7 @@
 
 use axum::{
     extract::{Path, Query, State},
-    http::{StatusCode, HeaderMap},
+    http::{StatusCode, HeaderMap, Method},
     response::Json,
 };
 use redis::{Commands, Connection, Client};
@@ -35,6 +35,7 @@ fn extract_api_key(headers: &HeaderMap, query: &Query<HashMap<String, String>>) 
     if let Some(auth_header) = headers.get("authorization") {
         if let Ok(auth_str) = auth_header.to_str() {
             if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                info!("Found API key in Authorization header: {}...", &token[..8.min(token.len())]);
                 return Some(token.to_string());
             }
         }
@@ -42,9 +43,11 @@ fn extract_api_key(headers: &HeaderMap, query: &Query<HashMap<String, String>>) 
     
     // Then try _token query parameter
     if let Some(token) = query.get("_token") {
+        info!("Found API key in _token query parameter: {}...", &token[..8.min(token.len())]);
         return Some(token.clone());
     }
     
+    warn!("No API key found in headers or query parameters");
     None
 }
 
@@ -178,6 +181,8 @@ pub async fn handle_ping(
     Query(query): Query<HashMap<String, String>>,
     headers: HeaderMap,
 ) -> Result<Json<RedisResponse>, ErrorResponse> {
+    info!("PING request for instance_id: {}", instance_id);
+    
     let api_key = extract_api_key(&headers, &Query(query)).ok_or_else(|| {
         (
             StatusCode::UNAUTHORIZED,
@@ -415,4 +420,27 @@ pub async fn handle_generic_command(
     Ok(Json(RedisResponse {
         result: redis_value_to_json(result),
     }))
+}
+
+/// Debug handler to see what requests are coming in
+pub async fn handle_debug_request(
+    State(_state): State<Arc<AppState>>,
+    Path((instance_id, path)): Path<(Uuid, String)>,
+    Query(query): Query<HashMap<String, String>>,
+    headers: HeaderMap,
+    method: axum::http::Method,
+) -> Result<Json<Value>, ErrorResponse> {
+    info!("DEBUG: {} request to /redis/{}/{} with query: {:?}", method, instance_id, path, query);
+    
+    // Log authorization header
+    if let Some(auth_header) = headers.get("authorization") {
+        if let Ok(auth_str) = auth_header.to_str() {
+            info!("DEBUG: Authorization header: {}", auth_str);
+        }
+    }
+    
+    Err((
+        StatusCode::NOT_IMPLEMENTED,
+        Json(json!({"error": format!("Debug: {} to /redis/{}/{} not implemented", method, instance_id, path)})),
+    ))
 }

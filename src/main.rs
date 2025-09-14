@@ -92,6 +92,9 @@ async fn main() {
         
         // Generic Redis command endpoint (for POST with JSON body)
         .route("/redis/:instance_id", post(handlers::redis::handle_generic_command))
+        
+        // Catch-all route for debugging Redis requests
+        .route("/redis/:instance_id/*path", get(handlers::redis::handle_debug_request))
         .layer(CorsLayer::permissive())
         .with_state(app_state)
         .layer(Extension(Arc::new(pool)));
