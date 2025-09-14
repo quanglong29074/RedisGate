@@ -1,3 +1,9 @@
+-- *** DEPRECATED - DO NOT USE ***
+-- This file has been replaced by SQLx migrations in the migrations/ directory.
+-- Using this file will cause conflicts with the migration system.
+-- See migrations/README.md for more information.
+-- *** DEPRECATED - DO NOT USE ***
+
 -- RedisGate Development Database Initialization
 -- This script sets up the initial database schema for development
 

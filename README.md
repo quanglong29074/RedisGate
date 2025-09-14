@@ -12,6 +12,17 @@ A cloud-native solution for providing Redis-as-a-Service on Kubernetes, accessib
 
 This project provides the management API and control plane for RedisGate. The development environment includes PostgreSQL for metadata storage, but actual Redis instances are managed by the Kubernetes operator.
 
+**Simple Development Setup:**
+```bash
+# One-time setup (installs all dependencies and starts services)
+./setup-dev.sh
+
+# Build and run the application (migrations run automatically)
+cargo build
+cargo run
+```
+
+**Alternative using Make commands:**
 ```bash
 # One-time setup (installs all dependencies)
 ./setup-dev.sh

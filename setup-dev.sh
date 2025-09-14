@@ -443,7 +443,7 @@ main() {
     echo "Configuration files:"
     echo "  - Environment: $ENV_FILE"
     echo "  - Docker Compose: $PROJECT_ROOT/docker-compose.yml"
-    echo "  - Database Init: $PROJECT_ROOT/scripts/init-db.sql"
+    echo "  - Database Migrations: $PROJECT_ROOT/migrations/"
     echo ""
 }
 
