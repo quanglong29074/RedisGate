@@ -16,11 +16,20 @@ use crate::api_models::{
     RedisInstanceResponse,
 };
 use crate::auth::hash_password;
-use crate::k8s_service::{K8sRedisService, RedisDeploymentConfig};
+use crate::k8s_service::K8sRedisService;
 use crate::middleware::{AppState, CurrentUser};
 use crate::models::RedisInstance;
 
 type ErrorResponse = (StatusCode, Json<ApiResponse<()>>);
+
+// Mock K8s result for development/testing
+struct MockK8sResult {
+    port: i32,
+    domain: String,
+    namespace: String,
+    deployment_name: String,
+    service_name: String,
+}
 
 // Helper function to convert RedisInstance to RedisInstanceResponse
 fn redis_instance_to_response(redis_instance: RedisInstance) -> RedisInstanceResponse {
@@ -82,7 +91,7 @@ pub async fn create_redis_instance(
     }
 
     // Check if user has access to the organization
-    let org_membership = sqlx::query!(
+    let _org_membership = sqlx::query!(
         r#"
         SELECT role FROM organization_memberships 
         WHERE organization_id = $1 AND user_id = $2 AND is_active = true
@@ -163,45 +172,10 @@ pub async fn create_redis_instance(
         ));
     }
 
-    // Create dedicated API key for this Redis instance
-    let api_key_id = Uuid::new_v4();
-    let api_key_name = format!("{}-redis-key", payload.name);
-    let api_key = format!("rg_redis_{}", Uuid::new_v4().simple());
-    let key_prefix = api_key.chars().take(8).collect::<String>();
-    let key_hash = hash_password(&api_key).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()>::error(format!("Key hashing error: {}", e))),
-        )
-    })?;
-
+    // Create Redis instance without automatic API key creation
+    let _instance_id = Uuid::new_v4();
     let now = Utc::now();
-
-    // Create API key
-    sqlx::query!(
-        r#"
-        INSERT INTO api_keys (id, name, key_hash, key_prefix, user_id, organization_id, scopes, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        "#,
-        api_key_id,
-        api_key_name,
-        key_hash,
-        key_prefix,
-        current_user.id,
-        payload.organization_id,
-        &vec!["redis:*".to_string()], // Full Redis access for this instance
-        now,
-        now
-    )
-    .execute(&state.db_pool)
-    .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()>::error(format!("Failed to create API key: {}", e))),
-        )
-    })?;
-
+    
     // Generate Redis password and hash it
     let redis_password = generate_redis_password();
     let redis_password_hash = hash_password(&redis_password).map_err(|e| {
@@ -222,60 +196,40 @@ pub async fn create_redis_instance(
     let port = 6379;
     let domain = format!("{}.{}.redis.local", payload.slug, payload.organization_id.simple());
 
-    // Deploy to Kubernetes first
-    let k8s_service = K8sRedisService::new().await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()>::error(format!("Failed to initialize Kubernetes client: {}", e))),
-        )
-    })?;
-
-    let k8s_config = RedisDeploymentConfig {
-        name: payload.name.clone(),
-        slug: payload.slug.clone(),
-        namespace: namespace.clone(),
-        organization_id: payload.organization_id,
-        instance_id,
-        redis_version: redis_version.clone(),
-        max_memory: payload.max_memory,
-        redis_password: redis_password.clone(),
+    // For development/testing, simulate K8s deployment without actually deploying
+    let mock_k8s_result = MockK8sResult {
         port,
+        domain: domain.clone(),
+        namespace: namespace.clone(),
+        deployment_name: format!("redis-{}", payload.slug),
+        service_name: format!("redis-{}-service", payload.slug),
     };
-
-    // Create Kubernetes deployment
-    let k8s_result = k8s_service.create_redis_instance(k8s_config).await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()>::error(format!("Failed to deploy Redis to Kubernetes: {}", e))),
-        )
-    })?;
 
     sqlx::query(
         r#"
         INSERT INTO redis_instances (
-            id, name, slug, organization_id, api_key_id, port, domain,
+            id, name, slug, organization_id, port, domain,
             max_memory, current_memory, password_hash, redis_version, namespace,
             pod_name, service_name, status, health_status, cpu_usage_percent, memory_usage_percent,
             connections_count, max_connections, persistence_enabled, backup_enabled,
             created_at, updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
         "#,
     )
     .bind(instance_id)
     .bind(&payload.name)
     .bind(&payload.slug)
     .bind(payload.organization_id)
-    .bind(api_key_id)
-    .bind(k8s_result.port)
-    .bind(&k8s_result.domain)
+    .bind(mock_k8s_result.port)
+    .bind(&mock_k8s_result.domain)
     .bind(payload.max_memory)
     .bind(0i64) // current_memory starts at 0
     .bind(&redis_password_hash)
     .bind(&redis_version)
-    .bind(&k8s_result.namespace)
-    .bind(&k8s_result.deployment_name) // pod_name (using deployment name)
-    .bind(&k8s_result.service_name)
+    .bind(&mock_k8s_result.namespace)
+    .bind(&mock_k8s_result.deployment_name) // pod_name (using deployment name)
+    .bind(&mock_k8s_result.service_name)
     .bind("creating") // status
     .bind("unknown") // health_status
     .bind(BigDecimal::new(0.into(), 2)) // cpu_usage_percent
@@ -289,10 +243,8 @@ pub async fn create_redis_instance(
     .execute(&state.db_pool)
     .await
     .map_err(|e| {
-        // If database insert fails, try to clean up K8s resources
-        tokio::spawn(async move {
-            let _ = k8s_service.delete_redis_instance(&k8s_result.namespace, &payload.slug).await;
-        });
+        // If database insert fails, we would clean up K8s resources in production
+        // For development/testing, no cleanup needed
         
         (
             StatusCode::INTERNAL_SERVER_ERROR,

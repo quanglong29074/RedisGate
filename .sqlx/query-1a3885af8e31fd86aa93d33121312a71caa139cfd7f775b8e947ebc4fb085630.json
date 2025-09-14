@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT * FROM redis_instances WHERE id = $1",
+  "query": "\n        SELECT id, name, slug, organization_id, api_key_id,\n               port, private_ip_address, public_ip_address, domain,\n               max_memory, current_memory, password_hash, redis_version,\n               namespace, pod_name, service_name,\n               status, last_health_check_at, health_status,\n               cpu_usage_percent, memory_usage_percent, connections_count, max_connections,\n               persistence_enabled, backup_enabled, last_backup_at,\n               created_at, updated_at, deleted_at\n        FROM redis_instances \n        WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL\n        ",
   "describe": {
     "columns": [
       {
@@ -151,6 +151,7 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid"
       ]
     },
@@ -186,5 +187,5 @@
       true
     ]
   },
-  "hash": "46faf72202a6d719815e0f1b496aa2ad65b9b23043658615f8b368e4ab2b497f"
+  "hash": "1a3885af8e31fd86aa93d33121312a71caa139cfd7f775b8e947ebc4fb085630"
 }

@@ -45,5 +45,8 @@ dotenv = "0.15"
 kube = "0.87"
 k8s-openapi = { version = "0.20", features = ["v1_28"] }
 
+# Redis client
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
+
 [dev-dependencies]
 tempfile = "3.0"
