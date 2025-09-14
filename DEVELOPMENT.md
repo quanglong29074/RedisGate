@@ -4,6 +4,20 @@ This directory contains scripts and configuration files to set up a complete dev
 
 ## Quick Start
 
+**For Development (Simple Workflow):**
+```bash
+# 1. One-time setup - installs dependencies and starts services
+./setup-dev.sh
+
+# 2. Build the application 
+cargo build
+
+# 3. Run the application (migrations run automatically)
+cargo run
+```
+
+**For Manual Step-by-Step Setup:**
+
 1. **One-time setup** (installs all dependencies):
    ```bash
    ./setup-dev.sh
@@ -25,7 +39,7 @@ This directory contains scripts and configuration files to set up a complete dev
 
 - **`env.development`** - Environment variables for development
 - **`docker-compose.yml`** - PostgreSQL service configuration
-- **`scripts/init-db.sql`** - Database initialization script
+- **`migrations/`** - Database migration files (replaces deprecated init-db.sql)
 
 ### Scripts
 
