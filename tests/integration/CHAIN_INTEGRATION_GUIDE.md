@@ -120,14 +120,24 @@ The performance test provides timing information:
 **What it tests**:
 - User account creation and authentication
 - Organization management
-- Redis instance provisioning
+- Redis instance provisioning (with Kubernetes detection)
 - API key management
 - Redis operations (SET/GET/DELETE)
 
 **Key validation points**:
 - All management API endpoints work correctly
 - Data flow between components is correct
-- Error handling for Kubernetes deployment failures
+- Environment-aware behavior based on Kubernetes availability
+- Proper error handling for infrastructure deployment failures
+
+**Kubernetes Detection**:
+The test automatically detects if Kubernetes is available by:
+1. Checking the `KUBERNETES_AVAILABLE` environment variable (set in CI)
+2. Attempting to connect to a Kubernetes cluster via `kubectl`
+
+**Behavior**:
+- **With Kubernetes**: Expects Redis instance creation and operations to succeed
+- **Without Kubernetes**: Gracefully handles deployment failures and tests management API only
 - Resource isolation and security
 
 ### 2. Multiple Resources
@@ -249,12 +259,24 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-python@v4
+    
+    # Set up Kubernetes for full chain testing
+    - name: Set up Kubernetes (minikube)
+      run: |
+        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+        sudo install minikube-linux-amd64 /usr/local/bin/minikube
+        minikube start --driver=docker
+        minikube addons enable ingress
+        echo "KUBERNETES_AVAILABLE=true" >> $GITHUB_ENV
+    
     - name: Run Chain Integration Tests
       run: |
         cd tests/integration
         pip install -r requirements.txt
         python -m pytest test_complete_chain_integration.py -v
 ```
+
+**Note:** With Kubernetes setup, the chain integration tests will validate the complete end-to-end workflow including Redis instance deployment and operations.
 
 ### Local Development
 

@@ -11,7 +11,8 @@ This module tests the complete end-to-end workflow for RedisGate:
 This validates the entire user journey from account creation to Redis operations.
 
 Note: The Redis operations test requires a working Kubernetes cluster to deploy
-actual Redis instances. In environments without K8s, the test will validate
+actual Redis instances. In CI environments with minikube setup, Redis instance
+creation should succeed. In local development without K8s, the test will validate
 the management API flow but skip the actual Redis operations.
 """
 
@@ -19,6 +20,7 @@ import pytest
 import asyncio
 import uuid
 import json
+import os
 from typing import Dict, Any, Optional
 
 from conftest import RedisGateClient, UpstashRedisClient
@@ -26,6 +28,25 @@ from conftest import RedisGateClient, UpstashRedisClient
 
 class TestCompleteChainIntegration:
     """Test the complete chain integration workflow for RedisGate."""
+    
+    def _is_kubernetes_available(self) -> bool:
+        """Check if Kubernetes is available in the environment."""
+        # Check for CI environment variable set in GitHub Actions
+        if os.getenv("KUBERNETES_AVAILABLE") == "true":
+            return True
+        
+        # Check if kubectl is available and can connect to a cluster
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["kubectl", "cluster-info"], 
+                capture_output=True, 
+                text=True, 
+                timeout=10
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+            return False
     
     @pytest.mark.integration 
     @pytest.mark.api
@@ -44,6 +65,10 @@ class TestCompleteChainIntegration:
         org_name = f"chain-org-{test_id}"
         redis_name = f"chain-redis-{test_id}"
         api_key_name = f"chain-key-{test_id}"
+        
+        # Check if Kubernetes is available
+        k8s_available = self._is_kubernetes_available()
+        print(f"🔍 Kubernetes availability: {'✅ Available' if k8s_available else '⚠️  Not available'}")
         
         # ====================================================================
         # STEP 1: Register User Account
@@ -99,7 +124,7 @@ class TestCompleteChainIntegration:
         print(f"🔗 STEP 4: Creating Redis instance: {redis_name}")
         
         # This step will attempt to create a Redis instance via Kubernetes
-        # In environments without K8s, this will fail, which is expected
+        # Success depends on K8s availability
         redis_instance = None
         k8s_deployment_error = None
         
@@ -113,20 +138,25 @@ class TestCompleteChainIntegration:
             
         except Exception as e:
             k8s_deployment_error = str(e)
-            print(f"⚠️  Redis instance creation failed (expected without K8s): {e}")
-            
-            # For testing purposes, we'll simulate what the Redis instance data would look like
-            redis_instance = {
-                "id": str(uuid.uuid4()),
-                "name": redis_name,
-                "slug": redis_name.lower().replace("_", "-"),
-                "organization_id": org_id,
-                "max_memory": 256 * 1024 * 1024,  # bytes
-                "status": "pending",
-                "endpoint_url": f"http://localhost:8080/redis/{redis_name}",
-                "created_at": "2024-01-01T00:00:00Z"
-            }
-            print(f"📋 Simulated Redis instance for testing: {redis_instance['id']}")
+            if k8s_available:
+                print(f"❌ Redis instance creation failed unexpectedly (K8s should be available): {e}")
+                # In CI with K8s, this should not fail - raise the error
+                raise
+            else:
+                print(f"⚠️  Redis instance creation failed (expected without K8s): {e}")
+                
+                # For testing purposes, we'll simulate what the Redis instance data would look like
+                redis_instance = {
+                    "id": str(uuid.uuid4()),
+                    "name": redis_name,
+                    "slug": redis_name.lower().replace("_", "-"),
+                    "organization_id": org_id,
+                    "max_memory": 256 * 1024 * 1024,  # bytes
+                    "status": "pending",
+                    "endpoint_url": f"http://localhost:8080/redis/{redis_name}",
+                    "created_at": "2024-01-01T00:00:00Z"
+                }
+                print(f"📋 Simulated Redis instance for testing: {redis_instance['id']}")
         
         # ====================================================================
         # STEP 5: Create API Key
@@ -170,6 +200,7 @@ class TestCompleteChainIntegration:
         redis_operations_successful = False
         redis_test_error = None
         
+        # Only try Redis operations if we have a real Redis instance (no K8s deployment error)
         if not k8s_deployment_error and redis_instance and api_key_response:
             try:
                 # Initialize Redis client with the created instance
@@ -206,9 +237,17 @@ class TestCompleteChainIntegration:
                 
             except Exception as e:
                 redis_test_error = str(e)
-                print(f"⚠️  Redis operations failed (expected without working Redis): {e}")
+                if k8s_available:
+                    print(f"❌ Redis operations failed unexpectedly (K8s should be available): {e}")
+                    # In CI with K8s, Redis operations should work
+                    raise
+                else:
+                    print(f"⚠️  Redis operations failed (expected without working Redis): {e}")
         else:
-            print(f"⚠️  Skipping Redis operations due to K8s deployment failure (expected)")
+            if k8s_deployment_error:
+                print(f"⚠️  Skipping Redis operations due to K8s deployment error")
+            else:
+                print(f"⚠️  Skipping Redis operations due to missing instance or API key")
         
         # ====================================================================
         # VALIDATION AND SUMMARY
@@ -222,8 +261,12 @@ class TestCompleteChainIntegration:
         print(f"✅ Step 3: Organization creation - SUCCESS")
         
         if k8s_deployment_error:
-            print(f"⚠️  Step 4: Redis instance creation - FAILED (K8s required)")
-            print(f"    Error: {k8s_deployment_error}")
+            if k8s_available:
+                print(f"❌ Step 4: Redis instance creation - FAILED (unexpected with K8s)")
+                print(f"    Error: {k8s_deployment_error}")
+            else:
+                print(f"⚠️  Step 4: Redis instance creation - FAILED (K8s required)")
+                print(f"    Error: {k8s_deployment_error}")
         else:
             print(f"✅ Step 4: Redis instance creation - SUCCESS")
             
@@ -242,7 +285,10 @@ class TestCompleteChainIntegration:
         
         print(f"\n📊 CHAIN TEST RESULTS:")
         print(f"   Management API Flow: ✅ COMPLETE")
-        print(f"   Redis Operations: {'✅ WORKING' if redis_operations_successful else '⚠️  REQUIRES K8S'}")
+        if k8s_available:
+            print(f"   Redis Operations: {'✅ WORKING' if redis_operations_successful else '❌ FAILED'}")
+        else:
+            print(f"   Redis Operations: {'✅ WORKING' if redis_operations_successful else '⚠️  REQUIRES K8S'}")
         
         # Test assertions - these should always pass for the management API
         assert user_id is not None, "User registration must succeed"
@@ -251,9 +297,14 @@ class TestCompleteChainIntegration:
         assert redis_instance is not None, "Redis instance data must be available"
         assert api_key_response is not None, "API key data must be available"
         
-        # Redis operations are optional depending on environment
-        if not k8s_deployment_error:
-            assert redis_operations_successful, "Redis operations should work with K8s available"
+        # Redis operations are required when K8s is available
+        if k8s_available:
+            assert not k8s_deployment_error, f"Redis instance creation should succeed with K8s: {k8s_deployment_error}"
+            assert redis_operations_successful, "Redis operations should work when K8s is available"
+        else:
+            # Redis operations are optional in environments without K8s
+            if not k8s_deployment_error:
+                assert redis_operations_successful, "Redis operations should work when deployment succeeds"
         
         print(f"\n🎉 Chain integration test completed successfully!")
         return {
@@ -262,7 +313,8 @@ class TestCompleteChainIntegration:
             "redis_instance": redis_instance,
             "api_key": api_key_response,
             "redis_operations_tested": redis_operations_successful,
-            "k8s_available": k8s_deployment_error is None
+            "k8s_available": k8s_available,
+            "k8s_deployment_successful": k8s_deployment_error is None
         }
 
     @pytest.mark.integration
@@ -279,7 +331,11 @@ class TestCompleteChainIntegration:
         test_username = f"multiuser-{test_id}"
         test_password = "MultiChain123!"
         
+        # Check K8s availability
+        k8s_available = self._is_kubernetes_available()
+        
         print(f"🔗 MULTI-RESOURCE CHAIN TEST: {test_id}")
+        print(f"🔍 Kubernetes availability: {'✅ Available' if k8s_available else '⚠️  Not available'}")
         
         # Register and login user
         await client.register_user(test_email, test_username, test_password)
@@ -298,7 +354,7 @@ class TestCompleteChainIntegration:
             organizations.append(org)
             print(f"✅ Created organization {i+1}: {org['id']}")
             
-            # Create Redis instance for each organization (will fail without K8s)
+            # Create Redis instance for each organization
             try:
                 redis_name = f"multi-redis-{test_id}-{i}"
                 redis_instance = await client.create_redis_instance(
@@ -310,15 +366,19 @@ class TestCompleteChainIntegration:
                 print(f"✅ Created Redis instance {i+1}: {redis_instance['id']}")
                 
             except Exception as e:
-                # Expected without K8s - create simulated instance
-                simulated_instance = {
-                    "id": str(uuid.uuid4()),
-                    "name": f"multi-redis-{test_id}-{i}",
-                    "organization_id": org["id"],
-                    "status": "pending"
-                }
-                redis_instances.append(simulated_instance)
-                print(f"📋 Simulated Redis instance {i+1}: {simulated_instance['id']}")
+                if k8s_available:
+                    print(f"❌ Redis instance creation {i+1} failed unexpectedly (K8s should be available): {e}")
+                    raise
+                else:
+                    # Expected without K8s - create simulated instance
+                    simulated_instance = {
+                        "id": str(uuid.uuid4()),
+                        "name": f"multi-redis-{test_id}-{i}",
+                        "organization_id": org["id"],
+                        "status": "pending"
+                    }
+                    redis_instances.append(simulated_instance)
+                    print(f"📋 Simulated Redis instance {i+1}: {simulated_instance['id']}")
         
         # Validate we created all resources
         assert len(organizations) == 3
@@ -358,7 +418,11 @@ class TestCompleteChainIntegration:
         test_username = f"perfuser-{test_id}"
         test_password = "PerfChain123!"
         
+        # Check K8s availability
+        k8s_available = self._is_kubernetes_available()
+        
         print(f"⏱️  PERFORMANCE CHAIN TEST: {test_id}")
+        print(f"🔍 Kubernetes availability: {'✅ Available' if k8s_available else '⚠️  Not available'}")
         
         timings = {}
         
@@ -378,8 +442,9 @@ class TestCompleteChainIntegration:
         organization = await client.create_organization(org_name, "Performance test org")
         timings["organization_creation"] = time.time() - start_time
         
-        # Time Redis instance creation (will likely fail but we measure the attempt)
+        # Time Redis instance creation
         start_time = time.time()
+        redis_created = False
         try:
             redis_name = f"perf-redis-{test_id}"
             redis_instance = await client.create_redis_instance(
@@ -389,9 +454,13 @@ class TestCompleteChainIntegration:
             )
             timings["redis_instance_creation"] = time.time() - start_time
             redis_created = True
-        except Exception:
+        except Exception as e:
             timings["redis_instance_creation"] = time.time() - start_time
-            redis_created = False
+            if k8s_available:
+                print(f"❌ Redis instance creation failed unexpectedly (K8s should be available): {e}")
+                raise
+            else:
+                redis_created = False
         
         # Calculate total time
         total_time = sum(timings.values())
