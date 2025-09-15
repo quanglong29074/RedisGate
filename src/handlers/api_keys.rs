@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     response::Json,
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use uuid::Uuid;
 use validator::Validate;
@@ -14,7 +14,7 @@ use crate::api_models::{
     ApiKeyCreationResponse, ApiKeyResponse, ApiResponse, CreateApiKeyRequest, PaginatedResponse,
     PaginationParams,
 };
-use crate::auth::hash_password;
+use crate::auth::{ApiKeyClaims};
 use crate::middleware::{AppState, CurrentUser};
 use crate::models::ApiKey;
 
@@ -35,21 +35,33 @@ fn api_key_to_response(api_key: ApiKey) -> ApiKeyResponse {
     }
 }
 
-// Generate a random API key
-fn generate_api_key() -> String {
-    use rand::Rng;
-    const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let mut rng = rand::thread_rng();
+// Generate a JWT-based API key
+fn generate_api_key_jwt(
+    state: &AppState, 
+    api_key_id: Uuid,
+    user_id: Uuid,
+    organization_id: Uuid,
+    scopes: Vec<String>,
+    expires_at: Option<DateTime<Utc>>
+) -> Result<(String, String), String> {
+    // Generate a key prefix for identification (still useful for display)
+    let key_prefix = format!("rg_{}", &api_key_id.to_string()[..8]);
     
-    let prefix = "rg"; // RedisGate prefix
-    let random_part: String = (0..32)
-        .map(|_| {
-            let idx = rng.gen_range(0..CHARSET.len());
-            CHARSET[idx] as char
-        })
-        .collect();
+    // Create JWT claims for the API key
+    let claims = ApiKeyClaims::new(
+        api_key_id,
+        user_id,
+        organization_id,
+        scopes,
+        key_prefix.clone(),
+        expires_at,
+    );
     
-    format!("{}{}", prefix, random_part)
+    // Generate JWT token
+    let jwt_token = state.jwt_manager.create_api_key_token(&claims)
+        .map_err(|e| format!("Failed to create JWT token: {:?}", e))?;
+    
+    Ok((jwt_token, key_prefix))
 }
 
 pub async fn create_api_key(
@@ -125,28 +137,33 @@ pub async fn create_api_key(
         ));
     }
 
-    // Generate API key
-    let api_key = generate_api_key();
-    let key_prefix = api_key.chars().take(8).collect::<String>(); // Store first 8 chars for identification
-    let key_hash = hash_password(&api_key).map_err(|e| {
+    // Generate API key JWT token
+    let api_key_id = Uuid::new_v4();
+    let (api_key_token, key_prefix) = generate_api_key_jwt(
+        &state,
+        api_key_id,
+        current_user.id,
+        payload.organization_id,
+        payload.scopes.clone(),
+        payload.expires_at,
+    ).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()>::error(format!("Key hashing error: {}", e))),
+            Json(ApiResponse::<()>::error(format!("Key generation error: {}", e))),
         )
     })?;
 
-    let api_key_id = Uuid::new_v4();
     let now = Utc::now();
 
-    // Create API key record
+    // Create API key record with JWT token
     sqlx::query!(
         r#"
-        INSERT INTO api_keys (id, name, key_hash, key_prefix, user_id, organization_id, scopes, expires_at, created_at, updated_at)
+        INSERT INTO api_keys (id, name, key_token, key_prefix, user_id, organization_id, scopes, expires_at, created_at, updated_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         "#,
         api_key_id,
         payload.name,
-        key_hash,
+        api_key_token,
         key_prefix,
         current_user.id,
         payload.organization_id,
@@ -167,7 +184,9 @@ pub async fn create_api_key(
     // Fetch created API key
     let created_key = sqlx::query_as!(
         ApiKey,
-        "SELECT * FROM api_keys WHERE id = $1",
+        r#"SELECT id, name, key_token, key_prefix, user_id, organization_id, scopes, 
+                  last_used_at, last_used_ip, is_active, expires_at, created_at, updated_at 
+           FROM api_keys WHERE id = $1"#,
         api_key_id
     )
     .fetch_one(&state.db_pool)
@@ -183,7 +202,7 @@ pub async fn create_api_key(
 
     let creation_response = ApiKeyCreationResponse {
         api_key: api_key_response,
-        key: api_key, // Only returned on creation
+        key: api_key_token, // Return the JWT token (only on creation)
     };
 
     Ok(Json(ApiResponse::success(creation_response)))
@@ -227,7 +246,9 @@ pub async fn list_api_keys(
     let api_keys = sqlx::query_as!(
         ApiKey,
         r#"
-        SELECT * FROM api_keys 
+        SELECT id, name, key_token, key_prefix, user_id, organization_id, scopes, 
+               last_used_at, last_used_ip, is_active, expires_at, created_at, updated_at
+        FROM api_keys 
         WHERE organization_id = $1 AND is_active = true
         ORDER BY created_at DESC
         LIMIT $2 OFFSET $3
@@ -311,7 +332,9 @@ pub async fn get_api_key(
     // Get API key
     let api_key = sqlx::query_as!(
         ApiKey,
-        "SELECT * FROM api_keys WHERE id = $1 AND organization_id = $2 AND is_active = true",
+        r#"SELECT id, name, key_token, key_prefix, user_id, organization_id, scopes, 
+                  last_used_at, last_used_ip, is_active, expires_at, created_at, updated_at
+           FROM api_keys WHERE id = $1 AND organization_id = $2 AND is_active = true"#,
         key_id,
         org_id
     )

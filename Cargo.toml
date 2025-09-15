@@ -3,6 +3,14 @@ name = "redisgate"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "redisgate"
+path = "src/main.rs"
+
+[[bin]]
+name = "demo_jwt"
+path = "demo_jwt.rs"
+
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }

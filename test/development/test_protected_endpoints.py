@@ -139,12 +139,13 @@ class TestApiKeys:
     
     @pytest.mark.protected
     async def test_create_api_key(self, api_client: ApiClient, auth_user: Dict[str, Any], test_organization: Dict[str, Any], wait_for_server):
-        """Test creating an API key."""
+        """Test creating an API key with JWT tokens."""
         org_id = test_organization["id"]
         
         api_key_data = {
             "name": f"Test API Key {generate_test_key()}",
-            "permissions": ["read", "write"]
+            "organization_id": org_id,
+            "scopes": ["read", "write"]  # Changed from permissions to scopes
         }
         
         response = await api_client.post(
@@ -153,14 +154,27 @@ class TestApiKeys:
             headers=auth_user["auth_headers"]
         )
         
-        assert response.status_code == 201
-        data = response.json()
-        assert data["name"] == api_key_data["name"]
-        assert data["permissions"] == api_key_data["permissions"]
-        assert "id" in data
+        assert response.status_code == 200  # Changed from 201 to 200
+        data = response.json()["data"]  # Response is wrapped in ApiResponse
+        
+        # Test the new JWT-based response structure
+        assert "api_key" in data
         assert "key" in data
-        assert "organization_id" in data
-        assert data["organization_id"] == org_id
+        
+        api_key_info = data["api_key"]
+        jwt_token = data["key"]
+        
+        assert api_key_info["name"] == api_key_data["name"]
+        assert api_key_info["scopes"] == api_key_data["scopes"]
+        assert api_key_info["organization_id"] == org_id
+        assert "id" in api_key_info
+        assert "key_prefix" in api_key_info
+        
+        # Verify JWT token format
+        assert isinstance(jwt_token, str)
+        assert len(jwt_token) > 100  # JWT tokens are long
+        assert jwt_token.count('.') == 2  # JWT has 3 parts separated by dots
+        assert api_key_info["key_prefix"].startswith("rg_")  # RedisGate prefix
     
     @pytest.mark.protected
     async def test_list_api_keys(self, api_client: ApiClient, auth_user: Dict[str, Any], test_organization: Dict[str, Any], test_api_key: Dict[str, Any], wait_for_server):
@@ -173,12 +187,13 @@ class TestApiKeys:
         )
         
         assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, list)
-        assert len(data) >= 1
+        data = response.json()["data"]  # Response is wrapped in ApiResponse
+        assert "items" in data  # Paginated response
+        assert isinstance(data["items"], list)
+        assert len(data["items"]) >= 1
         
         # Check if our test API key is in the list
-        key_ids = [key["id"] for key in data]
+        key_ids = [key["id"] for key in data["items"]]
         assert test_api_key["id"] in key_ids
     
     @pytest.mark.protected
@@ -193,10 +208,11 @@ class TestApiKeys:
         )
         
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]  # Response is wrapped in ApiResponse
         assert data["id"] == key_id
         assert data["name"] == test_api_key["name"]
         assert data["organization_id"] == org_id
+        assert "scopes" in data  # Changed from permissions to scopes
     
     @pytest.mark.protected
     async def test_revoke_api_key(self, api_client: ApiClient, auth_user: Dict[str, Any], test_organization: Dict[str, Any], wait_for_server):
@@ -206,7 +222,8 @@ class TestApiKeys:
         # Create a temporary API key for revocation
         api_key_data = {
             "name": f"Temp API Key {generate_test_key()}",
-            "permissions": ["read"]
+            "organization_id": org_id,
+            "scopes": ["read"]  # Changed from permissions to scopes
         }
         
         create_response = await api_client.post(
@@ -214,8 +231,8 @@ class TestApiKeys:
             json=api_key_data,
             headers=auth_user["auth_headers"]
         )
-        assert create_response.status_code == 201
-        temp_key = create_response.json()
+        assert create_response.status_code == 200  # Changed from 201 to 200
+        temp_key = create_response.json()["data"]["api_key"]  # Updated response structure
         
         # Revoke the API key
         revoke_response = await api_client.delete(
@@ -223,9 +240,9 @@ class TestApiKeys:
             headers=auth_user["auth_headers"]
         )
         
-        assert revoke_response.status_code == 204
+        assert revoke_response.status_code == 200  # Changed from 204 to 200
         
-        # Verify it's revoked by trying to get it
+        # Verify it's revoked by trying to get it (should return 404 since it's inactive)
         get_response = await api_client.get(
             f"/api/organizations/{org_id}/api-keys/{temp_key['id']}",
             headers=auth_user["auth_headers"]
@@ -380,7 +397,14 @@ class TestUnauthorizedAccess:
         response = await api_client.get(f"/api/organizations/{fake_org_id}/api-keys")
         assert response.status_code == 401
         
-        response = await api_client.post(f"/api/organizations/{fake_org_id}/api-keys", json={"name": "test"})
+        response = await api_client.post(
+            f"/api/organizations/{fake_org_id}/api-keys", 
+            json={
+                "name": "test",
+                "organization_id": fake_org_id,
+                "scopes": ["read"]  # Changed from permissions to scopes
+            }
+        )
         assert response.status_code == 401
     
     @pytest.mark.protected

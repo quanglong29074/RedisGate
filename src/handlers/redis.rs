@@ -14,6 +14,7 @@ use tracing::{info, warn, error};
 
 use crate::middleware::AppState;
 use crate::models::RedisInstance;
+use crate::auth::ApiKeyClaims;
 
 type ErrorResponse = (StatusCode, Json<Value>);
 
@@ -51,44 +52,26 @@ fn extract_api_key(headers: &HeaderMap, query: &Query<HashMap<String, String>>) 
     None
 }
 
-/// Authenticate API key and get Redis instance
+/// Authenticate API key (JWT) and get Redis instance
 async fn authenticate_and_get_instance(
     state: &AppState,
-    api_key: &str,
+    api_key_token: &str,
     instance_id: Uuid,
-) -> Result<RedisInstance, ErrorResponse> {
-    // Get API key from database
-    let api_key_record = sqlx::query!(
-        "SELECT id, organization_id, is_active FROM api_keys WHERE key_hash = $1",
-        crate::auth::hash_password(api_key).unwrap()
-    )
-    .fetch_optional(&state.db_pool)
-    .await
-    .map_err(|e| {
-        error!("Database error checking API key: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Internal server error"})),
-        )
-    })?;
+) -> Result<(RedisInstance, ApiKeyClaims), ErrorResponse> {
+    // Verify JWT token directly (no database lookup needed!)
+    let token_data = state.jwt_manager.verify_api_key_token(api_key_token)
+        .map_err(|_| {
+            warn!("Invalid or expired API key token");
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({"error": "Invalid or expired API key"})),
+            )
+        })?;
 
-    let api_key_record = api_key_record.ok_or_else(|| {
-        warn!("Invalid API key provided");
-        (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "Invalid API key"})),
-        )
-    })?;
+    let claims = token_data.claims;
+    info!("Authenticated API key: {} for organization: {}", claims.key_prefix, claims.organization_id);
 
-    if !api_key_record.is_active.unwrap_or(false) {
-        warn!("Inactive API key used");
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "API key is not active"})),
-        ));
-    }
-
-    // Get Redis instance and verify access
+    // Get Redis instance and verify organization access
     let instance = sqlx::query_as!(
         RedisInstance,
         r#"
@@ -104,7 +87,7 @@ async fn authenticate_and_get_instance(
         WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL
         "#,
         instance_id,
-        api_key_record.organization_id
+        claims.organization_id
     )
     .fetch_optional(&state.db_pool)
     .await
@@ -116,13 +99,15 @@ async fn authenticate_and_get_instance(
         )
     })?;
 
-    instance.ok_or_else(|| {
-        warn!("Redis instance not found or access denied");
+    let instance = instance.ok_or_else(|| {
+        warn!("Redis instance not found or access denied for organization: {}", claims.organization_id);
         (
             StatusCode::NOT_FOUND,
             Json(json!({"error": "Redis instance not found"})),
         )
-    })
+    })?;
+
+    Ok((instance, claims))
 }
 
 /// Get Redis connection for an instance
@@ -190,7 +175,7 @@ pub async fn handle_ping(
         )
     })?;
 
-    let instance = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
+    let (instance, _claims) = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
     let mut conn = get_redis_connection(&instance).await?;
 
     let result: String = redis::cmd("PING").query(&mut conn).map_err(|e| {
@@ -220,7 +205,7 @@ pub async fn handle_set(
         )
     })?;
 
-    let instance = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
+    let (instance, _claims) = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
     let mut conn = get_redis_connection(&instance).await?;
 
     // Handle optional parameters from query string
@@ -262,7 +247,7 @@ pub async fn handle_get(
         )
     })?;
 
-    let instance = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
+    let (instance, _claims) = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
     let mut conn = get_redis_connection(&instance).await?;
 
     let result: redis::Value = conn.get(&key).map_err(|e| {
@@ -292,7 +277,7 @@ pub async fn handle_del(
         )
     })?;
 
-    let instance = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
+    let (instance, _claims) = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
     let mut conn = get_redis_connection(&instance).await?;
 
     let result: i32 = conn.del(&key).map_err(|e| {
@@ -323,7 +308,7 @@ pub async fn handle_generic_command(
         )
     })?;
 
-    let instance = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
+    let (instance, _claims) = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
     let mut conn = get_redis_connection(&instance).await?;
 
     if payload.is_empty() {
@@ -883,7 +868,7 @@ pub async fn handle_incr(
         )
     })?;
 
-    let instance = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
+    let (instance, _claims) = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
     let mut conn = get_redis_connection(&instance).await?;
 
     let result: i64 = conn.incr(&key, 1).map_err(|e| {
@@ -913,7 +898,7 @@ pub async fn handle_hset(
         )
     })?;
 
-    let instance = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
+    let (instance, _claims) = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
     let mut conn = get_redis_connection(&instance).await?;
 
     let result: i32 = conn.hset(&key, &field, &value).map_err(|e| {
@@ -943,7 +928,7 @@ pub async fn handle_hget(
         )
     })?;
 
-    let instance = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
+    let (instance, _claims) = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
     let mut conn = get_redis_connection(&instance).await?;
 
     let result: redis::Value = conn.hget(&key, &field).map_err(|e| {
@@ -973,7 +958,7 @@ pub async fn handle_lpush(
         )
     })?;
 
-    let instance = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
+    let (instance, _claims) = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
     let mut conn = get_redis_connection(&instance).await?;
 
     let result: i32 = conn.lpush(&key, &value).map_err(|e| {
@@ -1003,7 +988,7 @@ pub async fn handle_lpop(
         )
     })?;
 
-    let instance = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
+    let (instance, _claims) = authenticate_and_get_instance(&state, &api_key, instance_id).await?;
     let mut conn = get_redis_connection(&instance).await?;
 
     let result: redis::Value = conn.lpop(&key, None).map_err(|e| {

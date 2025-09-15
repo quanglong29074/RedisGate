@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT * FROM api_keys WHERE id = $1",
+  "query": "SELECT id, name, key_token, key_prefix, user_id, organization_id, scopes, \n                  last_used_at, last_used_ip, is_active, expires_at, created_at, updated_at \n           FROM api_keys WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -15,8 +15,8 @@
       },
       {
         "ordinal": 2,
-        "name": "key_hash",
-        "type_info": "Varchar"
+        "name": "key_token",
+        "type_info": "Text"
       },
       {
         "ordinal": 3,
@@ -90,5 +90,5 @@
       true
     ]
   },
-  "hash": "aaafeb8627967368b7c1520b364d1af720d744cc3f04e521797b47b37fc1cf20"
+  "hash": "33f9b9eac379ff57f14fc3f5345c3aa2a4e5a4d1a72fc23bf9411d1d5e4a6e47"
 }

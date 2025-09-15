@@ -1,13 +1,13 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO api_keys (id, name, key_hash, key_prefix, user_id, organization_id, scopes, expires_at, created_at, updated_at)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n        ",
+  "query": "\n        INSERT INTO api_keys (id, name, key_token, key_prefix, user_id, organization_id, scopes, expires_at, created_at, updated_at)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n        ",
   "describe": {
     "columns": [],
     "parameters": {
       "Left": [
         "Uuid",
         "Varchar",
-        "Varchar",
+        "Text",
         "Varchar",
         "Uuid",
         "Uuid",
@@ -19,5 +19,5 @@
     },
     "nullable": []
   },
-  "hash": "1c998672d1fee6c33e8f24659ca0f134cd8b7505fcd08b8f61df0c0eddfb26f2"
+  "hash": "7046ae7f93a3d053d20986a29afd86336d7f5242f31363bf35d2359f68181e88"
 }
