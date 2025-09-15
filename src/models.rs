@@ -44,7 +44,7 @@ pub struct Organization {
 pub struct ApiKey {
     pub id: Uuid,
     pub name: String,
-    pub key_hash: String,
+    pub key_token: String,  // Changed from key_hash to key_token (stores JWT)
     pub key_prefix: String,
     pub user_id: Uuid,
     pub organization_id: Uuid,
