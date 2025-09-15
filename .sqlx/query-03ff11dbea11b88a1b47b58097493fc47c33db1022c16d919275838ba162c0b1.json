@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT * FROM api_keys WHERE id = $1 AND organization_id = $2 AND is_active = true",
+  "query": "\n        SELECT id, name, key_token, key_prefix, user_id, organization_id, scopes, \n               last_used_at, last_used_ip, is_active, expires_at, created_at, updated_at\n        FROM api_keys \n        WHERE organization_id = $1 AND is_active = true\n        ORDER BY created_at DESC\n        LIMIT $2 OFFSET $3\n        ",
   "describe": {
     "columns": [
       {
@@ -15,8 +15,8 @@
       },
       {
         "ordinal": 2,
-        "name": "key_hash",
-        "type_info": "Varchar"
+        "name": "key_token",
+        "type_info": "Text"
       },
       {
         "ordinal": 3,
@@ -72,7 +72,8 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid"
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -91,5 +92,5 @@
       true
     ]
   },
-  "hash": "a803c0cabbb917fdfceac57f2159b1cb60da3ed3c9a96dd0095ef308b277e78d"
+  "hash": "03ff11dbea11b88a1b47b58097493fc47c33db1022c16d919275838ba162c0b1"
 }

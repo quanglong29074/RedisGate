@@ -140,32 +140,10 @@ jobs:
           path: target/
           key: ${{ runner.os }}-cargo-build-integration-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Set up Kubernetes (minikube)
-        run: |
-          # Install kubectl
-          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-          
-          # Install minikube
-          curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-          sudo install minikube-linux-amd64 /usr/local/bin/minikube
-          rm minikube-linux-amd64
-          
-          # Start minikube
-          minikube start --driver=docker --kubernetes-version=v1.28.0
-          
-          # Enable required addons
-          minikube addons enable ingress
-          minikube addons enable metrics-server
-          
-          # Verify cluster is running
-          kubectl cluster-info
-          kubectl get nodes
-
       - name: Set up environment
         run: |
           echo "DATABASE_URL=postgresql://redisgate_dev:redisgate_dev_password@localhost:5432/redisgate_dev" >> $GITHUB_ENV
-          echo "KUBERNETES_AVAILABLE=true" >> $GITHUB_ENV
+          echo "KUBERNETES_AVAILABLE=false" >> $GITHUB_ENV
 
       - name: Install sqlx-cli and run migrations
         run: |
