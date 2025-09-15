@@ -158,7 +158,7 @@ async def test_api_key(api_client: ApiClient, auth_user: Dict[str, Any], test_or
     api_key_data = {
         "name": f"Test API Key {uuid4().hex[:8]}",
         "organization_id": org_id,
-        "permissions": ["read", "write"],
+        "scopes": ["read", "write"],  # Changed from permissions to scopes
         "expires_at": None  # No expiration for testing
     }
     
@@ -169,7 +169,16 @@ async def test_api_key(api_client: ApiClient, auth_user: Dict[str, Any], test_or
     )
     assert response.status_code == 200, f"API key creation failed: {response.text}"
     
-    return response.json()["data"]
+    # The response structure has changed with JWT tokens
+    response_data = response.json()["data"]
+    return {
+        "id": response_data["api_key"]["id"],
+        "name": response_data["api_key"]["name"],
+        "organization_id": response_data["api_key"]["organization_id"],
+        "scopes": response_data["api_key"]["scopes"],
+        "key": response_data["key"],  # JWT token
+        "key_prefix": response_data["api_key"]["key_prefix"]
+    }
 
 
 @pytest_asyncio.fixture
