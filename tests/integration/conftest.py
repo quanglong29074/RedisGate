@@ -88,7 +88,7 @@ class RedisGateServer:
             raise RuntimeError(f"Failed to build server: {build_result.stderr}")
         
         # Start the server process
-        cmd = ["cargo", "run"]
+        cmd = ["cargo", "run", "--bin", "redisgate"]
         console.print(f"[blue]Starting RedisGate server: {' '.join(cmd)}[/blue]")
         
         env = self.setup_environment()
