@@ -1,0 +1,5 @@
+{
+  "name": "RedisGate",
+  "description": "A frontend dashboard for managing user authentication, organizations, and Redis instances. Users can register, log in, create and view organizations, and manage Redis instances within each organization.",
+  "requestFramePermissions": []
+}
