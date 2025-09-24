@@ -26,6 +26,43 @@ async fn main() {
     // Initialize tracing
     tracing_subscriber::fmt::init();
 
+     // In development, spawn frontend dev server
+    #[cfg(debug_assertions)]
+    {
+        use tokio::process::Command;
+        use tokio::task;
+        
+        let frontend_task = task::spawn(async {
+            // Install dependencies first
+            let install_status = Command::new("bun")
+                .arg("install")
+                .current_dir("app/frontend-redis")
+                .status()
+                .await
+                .expect("Failed to run bun install");
+
+            if !install_status.success() {
+                warn!("bun install failed with status: {:?}", install_status);
+            } else {
+                info!("bun install completed successfully");
+            }
+
+            // Run dev server
+            let mut child = Command::new("bun")
+                .arg("run")
+                .arg("dev")
+                .current_dir("app/frontend-redis")
+                .spawn()
+                .expect("Failed to start frontend");
+
+            let status = child.wait().await.expect("Failed to wait for frontend");
+            info!("Frontend exited with status: {:?}", status);
+        });
+
+        // Don't block on frontend task in development
+        tokio::spawn(frontend_task);
+    }
+
     // Load environment variables - prioritize .env.development for development
     if std::path::Path::new(".env.development").exists() {
         dotenv::from_filename(".env.development").ok();
