@@ -43,7 +43,7 @@ regex = "1.10"
 # Web framework
 axum = "0.7"
 tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "trace"] }
+tower-http = { version = "0.5", features = ["fs", "cors"] }
 
 # Config
 config = "0.13"

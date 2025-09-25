@@ -151,6 +151,14 @@ const WelcomeContent: React.FC<{onNavigateToRegister: () => void;}> = ({ onNavig
                     <GitHubIcon />
                     View on GitHub
                 </a>
+                <a
+                    href="https://decenter.ai/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-xl bg-gradient-to-r from-purple-500 to-pink-600 px-4 py-2.5 text-base font-semibold text-white shadow-lg transition-all duration-300 transform hover:scale-105 hover:shadow-xl"
+                >
+                    Visit Decenter
+                </a>
             </div>
         </div>
       </div>

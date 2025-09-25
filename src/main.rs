@@ -9,7 +9,9 @@ use serde_json::json;
 use sqlx::{PgPool, Row};
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
 use tracing::{info, warn};
 
 mod api_models;
@@ -26,41 +28,41 @@ async fn main() {
     // Initialize tracing
     tracing_subscriber::fmt::init();
 
-     // In development, spawn frontend dev server
+    // In development, build frontend first
     #[cfg(debug_assertions)]
     {
         use tokio::process::Command;
-        use tokio::task;
         
-        let frontend_task = task::spawn(async {
-            // Install dependencies first
-            let install_status = Command::new("bun")
-                .arg("install")
-                .current_dir("app/frontend-redis")
-                .status()
-                .await
-                .expect("Failed to run bun install");
+        info!("Building frontend for development...");
+        
+        // Install dependencies first
+        let install_status = Command::new("bun")
+            .arg("install")
+            .current_dir("app/frontend-redis")
+            .status()
+            .await
+            .expect("Failed to run bun install");
 
-            if !install_status.success() {
-                warn!("bun install failed with status: {:?}", install_status);
-            } else {
-                info!("bun install completed successfully");
-            }
+        if !install_status.success() {
+            warn!("bun install failed with status: {:?}", install_status);
+        } else {
+            info!("bun install completed successfully");
+        }
 
-            // Run dev server
-            let mut child = Command::new("bun")
-                .arg("run")
-                .arg("dev")
-                .current_dir("app/frontend-redis")
-                .spawn()
-                .expect("Failed to start frontend");
+        // Build frontend
+        let build_status = Command::new("bun")
+            .arg("run")
+            .arg("build")
+            .current_dir("app/frontend-redis")
+            .status()
+            .await
+            .expect("Failed to build frontend");
 
-            let status = child.wait().await.expect("Failed to wait for frontend");
-            info!("Frontend exited with status: {:?}", status);
-        });
-
-        // Don't block on frontend task in development
-        tokio::spawn(frontend_task);
+        if !build_status.success() {
+            warn!("Frontend build failed with status: {:?}", build_status);
+        } else {
+            info!("Frontend build completed successfully");
+        }
     }
 
     // Load environment variables - prioritize .env.development for development
@@ -89,16 +91,22 @@ async fn main() {
     // Create application state
     let app_state = Arc::new(middleware::AppState::new(pool.clone(), &jwt_secret));
 
+    // Static files service - adjust path based on your frontend build output
+    let static_files_service = ServeDir::new("app/frontend-redis/dist")
+        .not_found_service(ServeDir::new("app/frontend-redis/dist").append_index_html_on_directories(true));
+
     // Build application with all routes
     let app = Router::new()
-        // Public routes (no authentication required)
+        // API routes first (higher priority)
+        
+        // Public API routes (no authentication required)
         .route("/health", get(health_check))
         .route("/version", get(version))
         .route("/stats", get(database_stats))
         .route("/auth/register", post(handlers::auth::register))
         .route("/auth/login", post(handlers::auth::login))
         
-        // Protected routes (authentication required)
+        // Protected API routes (authentication required)
         .nest("/api", 
             Router::new()
                 .route("/organizations", post(handlers::organizations::create_organization))
@@ -141,16 +149,21 @@ async fn main() {
         
         // Catch-all route for debugging Redis requests
         .route("/redis/:instance_id/*path", get(handlers::redis::handle_debug_request))
+        
+        // Serve static files for all other routes (must be last)
+        .fallback_service(static_files_service)
+        
         .layer(CorsLayer::permissive())
         .with_state(app_state)
         .layer(Extension(Arc::new(pool)));
 
     // Start server
-    let listener = TcpListener::bind("0.0.0.0:8080")
+    let listener = TcpListener::bind("0.0.0.0:3000")
         .await
         .expect("Failed to bind to address");
 
-    info!("Server starting on 0.0.0.0:8080");
+    info!("Server starting on 0.0.0.0:3000");
+    info!("Serving frontend static files from: app/frontend-redis/dist");
 
     axum::serve(listener, app)
         .await
