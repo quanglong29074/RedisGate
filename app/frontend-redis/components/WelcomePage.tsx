@@ -234,6 +234,14 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ onNavigateToLogin, onNavigate
               <LogoIcon />
               <span className="text-xl font-bold text-slate-800">RedisGate</span>
             </button>
+            <a
+              href="https://decenter.ai/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-4 text-sm font-semibold text-teal-600 hover:text-teal-500 transition-colors hidden lg:block"
+            >
+              Powered by Decenter
+            </a>
           </div>
           <div className="flex lg:hidden">
             <button
@@ -336,6 +344,14 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ onNavigateToLogin, onNavigate
                 <button onClick={() => onNavigate('terms')} className="text-xs leading-5 text-gray-400 hover:text-white transition-colors">
                     Terms of Service
                 </button>
+                <a
+                  href="https://decenter.ai/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs leading-5 text-gray-300 hover:text-teal-400 transition-colors font-semibold"
+                >
+                  Powered by Decenter
+                </a>
             </div>
         </div>
       </footer>
